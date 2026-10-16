@@ -1,16 +1,18 @@
 """
-Linksys FGW3000 - 安全开启 Telnet
+Linksys FGW3000-HK - 安全开启 Telnet / SSH
 ================================================================
+仅适用于 Linksys FGW3000-HK。
 原理: 利用配置备份/恢复机制，在备份包中：
 1. 开启 sysini.conf 中的 sys_gtkshell 与 sys_telnetd
-2. 注入 /mnt/jffs2/bin/login_without_shell_auth 免密 Shell 脚本 (对应 sys_gtkshell)
-3. 更新 etc/shadow 中的 root 密码为 admin 作为双重保障
-4. 自动保留原机 passphase (MAC 地址)，保证 100% 校验通过
+2. 开启 sshd.conf 中的 sshd_enable
+3. 注入 /mnt/jffs2/bin/login_without_shell_auth 免密 Shell 脚本 (对应 sys_gtkshell)
+4. 更新 etc/shadow 中的 root 密码为 admin 作为双重保障
+5. 自动保留原机 passphase (MAC 地址)，保证 100% 校验通过
 
 使用步骤:
-1. 在网页已登录状态下下载 Config（当前已保存在本目录下）
+1. 在网页已登录状态下下载 Config，重命名为 Config 放到本脚本同目录
 2. 运行本脚本: python enable_telnet.py
-3. 在 Web 后台的"软件设置"页面中恢复配置，选择生成的 new_config.bin
+3. 生成 new_config.bin 后，按 docs/01 的步骤通过 F12 刷入
 4. 路由器重启后，命令行运行: telnet 192.168.15.1
 """
 

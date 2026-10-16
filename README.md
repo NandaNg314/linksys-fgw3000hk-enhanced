@@ -1,10 +1,14 @@
-# Linksys FGW3000-HK Enhanced
+# Linksys FGW3000-HK Enhanced（仅适用于 FGW3000-HK）
 
-> 为 **Linksys FGW3000-HK**（高通 IPQ8072A + 骁龙 X55 5G CPE）打造的
+> **⚠️ 本项目的 HTML/脚本/刷机包均为 Linksys FGW3000-HK 专用，其他型号（如 FGW3000 / 非 HK 版）不适用！**
+>
+> 为 **Linksys FGW3000-HK**（高通 IPQ8072A + 骁龙 X55 5G CPE，香港版）打造的
 > **解锁调试权限 + 极客 Web 控制台** 开源项目。
 > 支持锁频段、切运营商、全屋透明代理（Sing-box）、DNS 加速与全屋去广告。
 
 **English** | [中文](#中文文档)
+
+> **⚠️ HTML / scripts / config pack are for Linksys FGW3000-HK (HK version) ONLY.**
 
 An open-source project for the **Linksys FGW3000-HK** 5G CPE:
 **unlock Telnet/SSH** + a **geek web dashboard** (band lock, carrier switch,
@@ -17,10 +21,30 @@ transparent proxy via Sing-box, SmartDNS + Anti-AD whole-home ad-blocking).
 
 ---
 
+## 这个项目有什么用？（能帮你解决什么）
+
+原厂 FGW3000-HK 是一台被"锁住"的 5G CPE：**关掉了调试口、锁死了大部分能力、不能自由配置**。
+本项目把它变成一台**功能完整、可控可玩的 5G 软路由**：
+
+| 原厂状态（痛点） | 本项目之后（你能做的） |
+| --- | --- |
+| 没有 Telnet/SSH，进不去系统，什么都改不了 | **永久开启 Telnet/SSH，root 直入**，想怎么折腾都行 |
+| 5G 频段/运营商基本没法选，信号不好只能忍着 | **可视化锁频段 / 切运营商**，弱信号、拥堵基站都能规避 |
+| 没法做全屋科学上网 | **全屋透明代理（Sing-box TUN）**，局域网设备零配置出海 |
+| 广告满天飞、DNS 慢 | **SmartDNS 加速 + Anti-AD 近 10 万条规则全屋去广告** |
+| 官方 Web 后台功能寒酸 | **一套漂亮的极客 Web 控制台**（Apple 风、深浅色自适应） |
+| 改错了可能失联、变砖 | 所有改动走 `/mnt/jffs2` + 启动自愈 + 看门狗，稳定可回滚 |
+
+**适合谁**：想让手头这台 FGW3000-HK 发挥全部实力、又不想刷第三方固件的玩家。
+**不适合谁**：非 FGW3000-HK 的其他路由器；不想动手、只想要开箱即用固件的人。
+
+---
+
 ## 中文文档
 
 ### 目录
 
+- [这个项目有什么用？](#这个项目有什么用能帮你解决什么)
 - [一、这是什么](#一这是什么)
 - [二、解锁权限的原理](#二解锁权限的原理)
 - [三、第一步：开启 Telnet / SSH](#三第一步开启-telnet--ssh)
