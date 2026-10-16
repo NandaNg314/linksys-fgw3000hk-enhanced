@@ -1,0 +1,27 @@
+# --- 本地/敏感文件，禁止提交 ---
+# 从设备导出的配置备份（含设备 MAC / 密码哈希 / 节点等）
+Config
+*.bin
+new_config.bin
+original_backup.bin
+
+# 明文凭据 / 环境变量
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.p12
+
+# 个人文档（按需保留）
+*secret*
+*token*
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+__pycache__/
+*.pyc

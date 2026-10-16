@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linksys FGW3000 短信收发控制台</title>
+    <style>
+        :root {
+            --primary: #0066cc;
+            --primary-hover: #0052a3;
+            --bg: #f4f6f9;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --text-muted: #666666;
+            --border: #e1e4e8;
+            --success: #28a745;
+            --danger: #dc3545;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            padding: 16px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        header h1 { font-size: 1.4rem; color: #111; display: flex; align-items: center; gap: 8px; }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            border-radius: 20px;
+            background: #e9ecef;
+            color: var(--text-muted);
+        }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-danger { background: #f8d7da; color: #721c24; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+        .stat-title { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px; }
+        .stat-val { font-size: 1.15rem; font-weight: 600; }
+        
+        .main-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 14px 18px;
+            background: #fafbfc;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-header h2 { font-size: 1.05rem; font-weight: 600; }
+        .card-body { padding: 18px; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-sm { padding: 4px 10px; font-size: 0.8rem; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-secondary { background: #e2e6ea; color: #333; }
+        .btn-secondary:hover { background: #dbe0e5; }
+        .btn-quick {
+            margin-right: 6px;
+            margin-bottom: 8px;
+            background: #eef4fc;
+            color: var(--primary);
+            border: 1px solid #cce0ff;
+        }
+        .btn-quick:hover { background: #d9e8fc; }
+
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; color: #444; }
+        .form-control {
+            width: 100%;
+            padding: 9px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-size: 0.95rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .form-control:focus { border-color: var(--primary); }
+        textarea.form-control { resize: vertical; min-height: 80px; }
+
+        .sms-item {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 12px;
+            background: #ffffff;
+            transition: box-shadow 0.2s;
+        }
+        .sms-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .sms-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .sms-sender { font-weight: 700; color: #111; font-size: 0.95rem; }
+        .sms-content {
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: #fbfbfd;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .loading { opacity: 0.6; pointer-events: none; }
+        .empty-tip { text-align: center; color: var(--text-muted); padding: 30px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📬 Linksys FGW3000 短信系统</h1>
+            <div>
+                <button class="btn btn-secondary btn-sm" onclick="loadAll()">🔄 刷新全部</button>
+            </div>
+        </header>
+
+        <!-- 状态栏 -->
+        <div class="grid">
+            <div class="stat-card">
+                <div class="stat-title">SIM 卡状态</div>
+                <div class="stat-val" id="stat-cpin">检测中...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">当前信号 (CSQ)</div>
+                <div class="stat-val" id="stat-csq">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">蜂窝运营商</div>
+                <div class="stat-val" id="stat-cops">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Telegram 转发</div>
+                <div class="stat-val"><span class="badge badge-success">已启用</span></div>
+            </div>
+        </div>
+
+        <!-- 发送短信卡片 -->
+        <div class="main-card">
+            <div class="card-header">
+                <h2>📤 发送新短信</h2>
+            </div>
+            <div class="card-body">
+                <div style="margin-bottom: 10px;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 8px;">快捷发送:</span>
+                    <button class="btn btn-sm btn-quick" onclick="quickFill('10086','CXLL')">查流量 (10086)</button>
+                    <button class="btn btn-sm btn-quick" onclick="quickFill('10086','101')">查话费 (10086)</button>
+                    <button class="btn btn-sm btn-quick" onclick="quickFill('10086','CXTC')">查套餐 (10086)</button>
+                </div>
+                <div class="form-group">
+                    <label>收件人手机号</label>
+                    <input type="text" id="send-to" class="form-control" placeholder="如: 10086 或 13800000000">
+                </div>
+                <div class="form-group">
+                    <label>短信内容</label>
+                    <textarea id="send-msg" class="form-control" placeholder="输入短信内容..."></textarea>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="send-status" style="font-size: 0.9rem;"></span>
+                    <button class="btn btn-primary" id="btn-send" onclick="sendSMS()">立即发送</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 收件箱卡片 -->
+        <div class="main-card">
+            <div class="card-header">
+                <h2>📥 本地收件箱 (<span id="inbox-count">0</span>/15)</h2>
+                <span style="font-size: 0.8rem; color: var(--text-muted);">上限15条，超量自动淘汰最远短信</span>
+            </div>
+            <div class="card-body" id="inbox-list">
+                <div class="empty-tip">正在拉取短信列表中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/weblog/sms_api.cgi';
+
+        function quickFill(to, msg) {
+            document.getElementById('send-to').value = to;
+            document.getElementById('send-msg').value = msg;
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API_URL}?action=status&t=${Date.now()}`);
+                const data = await res.json();
+                
+                const cpinEl = document.getElementById('stat-cpin');
+                if (data.cpin === 'READY') {
+                    cpinEl.innerHTML = '<span class="badge badge-success">正常就绪</span>';
+                } else {
+                    cpinEl.innerHTML = `<span class="badge badge-danger">${data.cpin}</span>`;
+                }
+
+                document.getElementById('stat-csq').innerText = data.csq ? `${data.csq} (满格)` : '--';
+                
+                let copsName = data.cops || '--';
+                if (copsName.includes('CMCC')) copsName = '中国移动 (CMCC 5G)';
+                else if (copsName.includes('UNICOM')) copsName = '中国联通';
+                else if (copsName.includes('TELECOM')) copsName = '中国电信';
+                document.getElementById('stat-cops').innerText = copsName;
+
+            } catch (e) {
+                console.error("loadStatus error:", e);
+            }
+        }
+
+        async function loadInbox() {
+            const listEl = document.getElementById('inbox-list');
+            try {
+                const res = await fetch(`${API_URL}?action=inbox&t=${Date.now()}`);
+                const data = await res.json();
+
+                if (!data.ok || !data.messages || data.messages.length === 0) {
+                    listEl.innerHTML = '<div class="empty-tip">📭 暂无短信记录</div>';
+                    document.getElementById('inbox-count').innerText = '0';
+                    return;
+                }
+
+                document.getElementById('inbox-count').innerText = data.messages.length;
+                let html = '';
+                
+                // 倒序排列（最新在前）
+                data.messages.reverse().forEach(m => {
+                    html += `
+                        <div class="sms-item">
+                            <div class="sms-meta">
+                                <span class="sms-sender">👤 ${escapeHtml(m.from || '未知发件人')}</span>
+                                <div>
+                                    <span style="margin-right: 12px;">🕒 ${escapeHtml(m.time || '')}</span>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteSMS(${m.index})">删除</button>
+                                </div>
+                            </div>
+                            <div class="sms-content">${escapeHtml(m.content || '(空内容)')}</div>
+                        </div>
+                    `;
+                });
+                listEl.innerHTML = html;
+            } catch (e) {
+                listEl.innerHTML = '<div class="empty-tip" style="color:var(--danger)">拉取收件箱失败，请检查网络</div>';
+            }
+        }
+
+        async function sendSMS() {
+            const to = document.getElementById('send-to').value.trim();
+            const msg = document.getElementById('send-msg').value.trim();
+            const btn = document.getElementById('btn-send');
+            const statusEl = document.getElementById('send-status');
+
+            if (!to || !msg) {
+                alert("请输入收件人号码与短信正文！");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = '正在发送...';
+            statusEl.innerText = '';
+
+            try {
+                const url = `${API_URL}?action=send&to=${encodeURIComponent(to)}&msg=${encodeURIComponent(msg)}&t=${Date.now()}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.ok) {
+                    statusEl.innerHTML = '<span style="color:var(--success); font-weight:bold;">🎉 发送成功！已同步至 Telegram</span>';
+                    document.getElementById('send-msg').value = '';
+                    setTimeout(loadInbox, 3000);
+                } else {
+                    statusEl.innerHTML = `<span style="color:var(--danger)">❌ 发送失败: ${escapeHtml(data.error || '未知错误')}</span>`;
+                }
+            } catch (e) {
+                statusEl.innerHTML = '<span style="color:var(--danger)">❌ 发送异常，请重试</span>';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '立即发送';
+            }
+        }
+
+        async function deleteSMS(idx) {
+            if (!confirm(`确认要从 SIM 卡中删除第 ${idx} 号短信吗？`)) return;
+            try {
+                const res = await fetch(`${API_URL}?action=delete&index=${idx}&t=${Date.now()}`);
+                const data = await res.json();
+                if (data.ok) {
+                    loadInbox();
+                } else {
+                    alert("删除失败");
+                }
+            } catch (e) {
+                alert("请求失败");
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function loadAll() {
+            loadStatus();
+            loadInbox();
+        }
+
+        // 初始化加载
+        loadAll();
+        // 每 15 秒定时自动刷新收件箱和状态
+        setInterval(loadAll, 15000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,3305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Linksys FGW3000-HK 极客控制台</title>
+  <style>
+    /* ===== Apple HIG tokens: light default, dark via [data-theme] or system ===== */
+    :root {
+      color-scheme: light;
+      --bg: #F5F5F7;
+      --card-bg: #FFFFFF;
+      --card-border: rgba(0, 0, 0, 0.06);
+      --text: #1D1D1F;
+      --text-dim: #6E6E73;
+      --text-muted: #86868B;
+      --primary: #0071E3;
+      --primary-hover: #0077ED;
+      --success: #30D158;
+      --warning: #FF9F0A;
+      --danger: #FF453A;
+      --sep: rgba(0, 0, 0, 0.08);
+      --fill: rgba(0, 0, 0, 0.04);
+      --fill-strong: rgba(0, 0, 0, 0.06);
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --spring: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #09090B;
+      --card-bg: #121215;
+      --card-border: rgba(255, 255, 255, 0.07);
+      --text: #EDEDEF;
+      --text-dim: #A1A1A6;
+      --text-muted: #7C7C82;
+      --primary: #0A84FF;
+      --primary-hover: #2E95FF;
+      --success: #30D158;
+      --warning: #FF9F0A;
+      --danger: #FF453A;
+      --sep: rgba(255, 255, 255, 0.09);
+      --fill: rgba(255, 255, 255, 0.06);
+      --fill-strong: rgba(255, 255, 255, 0.09);
+      --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-sm: inset 0 1px 0 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.3);
+    }
+    /* explicit light overrides system dark */
+    :root[data-theme="light"] {
+      color-scheme: light;
+    }
+    /* no explicit choice -> follow system */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        color-scheme: dark;
+        --bg: #09090B;
+        --card-bg: #121215;
+        --card-border: rgba(255, 255, 255, 0.07);
+        --text: #EDEDEF;
+        --text-dim: #A1A1A6;
+        --text-muted: #7C7C82;
+        --primary: #0A84FF;
+        --primary-hover: #2E95FF;
+        --success: #30D158;
+        --warning: #FF9F0A;
+        --danger: #FF453A;
+        --sep: rgba(255, 255, 255, 0.09);
+        --fill: rgba(255, 255, 255, 0.06);
+        --fill-strong: rgba(255, 255, 255, 0.09);
+        --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
+        --shadow-sm: inset 0 1px 0 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.3);
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 48px;
+           font-size: 14px; line-height: 1.5; }
+
+    /* inline icon default */
+    svg.ic { vertical-align: -2px; flex-shrink: 0; }
+
+    /* ===== top bar ===== */
+    header {
+      background: color-mix(in srgb, var(--card-bg) 76%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--card-border); position: sticky; top: 0; z-index: 50;
+      padding: 12px 28px; display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon { width: 38px; height: 38px; background: var(--primary); color: #fff; border-radius: 10px;
+                  display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px;
+                  letter-spacing: -0.3px; box-shadow: var(--shadow-xs); }
+    .brand-text h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
+    .brand-text p { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+    .status-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge { padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 500;
+             display: inline-flex; align-items: center; gap: 6px; background: var(--fill);
+             border: 1px solid var(--card-border); color: var(--text-dim); }
+    .badge-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .badge-green { color: var(--success); }
+    .badge-green .badge-dot { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent); }
+    .badge-red { color: var(--danger); }
+    .badge-red .badge-dot { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
+
+    .theme-toggle {
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--card-border);
+      background: var(--fill); color: var(--text-dim); cursor: pointer; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.2s var(--spring);
+    }
+    .theme-toggle:hover { background: var(--fill-strong); color: var(--text); }
+    .theme-toggle:active { transform: scale(0.94); }
+    .theme-toggle .ic-sun { display: none; }
+    :root[data-theme="dark"] .theme-toggle .ic-sun { display: inline; }
+    :root[data-theme="dark"] .theme-toggle .ic-moon { display: none; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .theme-toggle .ic-sun { display: inline; }
+      :root:not([data-theme]) .theme-toggle .ic-moon { display: none; }
+    }
+
+    .load-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+                  font-size: 12px; font-weight: 600; }
+    .load-ok   { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+    .load-mid  { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
+    .load-high { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+    .load-sub  { font-size: 11px; color: var(--text-muted); margin-top: 5px; font-variant-numeric: tabular-nums; }
+
+    /* ===== segmented control nav ===== */
+    .tabs-nav { max-width: 1200px; margin: 22px auto 0; padding: 0 28px; display: flex; gap: 4px;
+                background: var(--fill); border-radius: 12px; border: 1px solid var(--card-border);
+                width: fit-content; margin-left: auto; margin-right: auto; }
+    .tab-btn {
+      padding: 8px 20px; background: transparent; border: none; color: var(--text-dim);
+      font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 9px; margin: 3px;
+      transition: all 0.2s var(--spring); display: flex; align-items: center; gap: 7px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--text); background: var(--card-bg); box-shadow: var(--shadow-xs); font-weight: 600; }
+
+    .container { max-width: 1200px; margin: 22px auto; padding: 0 28px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeUp 0.35s var(--spring); }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: var(--radius); padding: 24px; margin-bottom: 18px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-title { font-size: 15px; font-weight: 600; margin-bottom: 18px; letter-spacing: -0.2px;
+                  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .card-subtitle { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .metric-box { background: var(--fill); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px 16px; }
+    .metric-label { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; letter-spacing: 0.2px; }
+    .metric-value { font-size: 21px; font-weight: 600; display: flex; align-items: baseline; gap: 4px;
+                    font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
+    .metric-unit { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+    .progress-bar-bg { width: 100%; height: 5px; background: var(--fill-strong); border-radius: 3px; margin-top: 9px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s var(--spring); }
+
+    .mode-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    .mode-option {
+      border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px;
+      cursor: pointer; transition: all 0.2s var(--spring); background: var(--fill);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .mode-option:hover { background: var(--fill-strong); }
+    .mode-option.selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+    .mode-title { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+    .mode-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+
+    .band-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .band-item {
+      border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 11px 13px;
+      cursor: pointer; transition: all 0.16s var(--spring); background: var(--fill);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .band-item:hover { background: var(--fill-strong); }
+    .band-item.checked { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 9%, transparent); }
+    .band-item.disabled { opacity: 0.4; cursor: not-allowed; border-style: dashed; }
+    .band-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .band-name { font-weight: 600; font-size: 13px; }
+    .band-tag { font-size: 10px; color: var(--text-muted); }
+    .band-checkbox { pointer-events: none; accent-color: var(--primary); width: 15px; height: 15px; flex-shrink: 0; }
+
+    .btn {
+      padding: 9px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+      cursor: pointer; border: 1px solid transparent; transition: all 0.16s var(--spring);
+      display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: var(--shadow-xs); }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
+    .btn-danger:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+    .btn-secondary { background: var(--card-bg); color: var(--text); border: 1px solid var(--card-border); box-shadow: var(--shadow-xs); }
+    .btn-secondary:hover { background: var(--fill); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+
+    .switch-wrap { display: flex; align-items: center; gap: 12px; }
+    .switch { position: relative; display: inline-block; width: 46px; height: 28px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; inset: 0; background-color: var(--fill-strong);
+              transition: .28s var(--spring); border-radius: 999px; }
+    .slider:before { position: absolute; content: ""; height: 24px; width: 24px; left: 2px; bottom: 2px;
+                     background-color: #fff; transition: .28s var(--spring); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    input:checked + .slider { background-color: var(--success); }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    .node-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 14px; }
+    .node-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm); padding: 14px; cursor: pointer; transition: all 0.2s var(--spring); position: relative;
+      box-shadow: var(--shadow-xs);
+    }
+    .node-card:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--card-border)); transform: translateY(-1px); }
+    .node-card.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+    .node-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+    .node-title { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+    .node-meta { font-size: 11px; color: var(--text-dim); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .proto-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 6px; background: var(--fill);
+                   color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.3px; }
+    .delay-tag { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .delay-good { color: var(--success); }
+    .delay-med { color: var(--warning); }
+    .delay-bad { color: var(--danger); }
+
+    /* subscription & group */
+    .sub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-top: 14px; }
+    .sub-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm); padding: 16px; transition: all 0.2s var(--spring); position: relative;
+      display: flex; flex-direction: column; justify-content: space-between; gap: 12px; box-shadow: var(--shadow-xs);
+    }
+    .sub-card:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--card-border)); }
+    .sub-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .sub-name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .sub-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 500;
+                 background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+    .sub-url-box {
+      font-size: 11px; color: var(--text-dim); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: var(--fill); padding: 7px 10px; border-radius: 8px;
+      border: 1px solid var(--card-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .sub-url-box:hover { border-color: var(--primary); color: var(--text); }
+    .sub-meta { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+    .sub-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+
+    .group-filter-wrap { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 14px; margin-bottom: 4px; }
+    .group-pill {
+      padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 500;
+      cursor: pointer; background: var(--fill); border: 1px solid var(--card-border);
+      color: var(--text-dim); transition: all 0.16s var(--spring); display: inline-flex; align-items: center; gap: 6px;
+      user-select: none;
+    }
+    .group-pill:hover { color: var(--text); background: var(--fill-strong); }
+    .group-pill.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .group-pill-count { font-size: 10px; opacity: 0.9; background: color-mix(in srgb, currentColor 18%, transparent); padding: 1px 7px; border-radius: 999px; }
+    .group-tag {
+      font-size: 10px; padding: 2px 7px; border-radius: 6px;
+      background: var(--fill); color: var(--text-dim); border: 1px solid var(--card-border);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .group-tag:hover { color: var(--text); background: var(--fill-strong); }
+
+    .search-box {
+      display: flex; align-items: center; gap: 8px; background: var(--fill);
+      padding: 0 12px; border-radius: 999px; height: 38px; border: 1px solid var(--card-border);
+      color: var(--text-muted); transition: all 0.2s var(--spring);
+    }
+    .search-box:focus-within { border-color: var(--primary); }
+    .search-box .ic { flex-shrink: 0; }
+    .node-search-input {
+      border: none; background: transparent; color: var(--text); font-size: 12px;
+      outline: none; width: 130px; transition: width 0.2s var(--spring);
+    }
+    .node-search-input::placeholder { color: var(--text-muted); }
+    .search-box:focus-within .node-search-input { width: 170px; }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .spin { display: inline-block; animation: spin 1s linear infinite; }
+
+    .rule-textarea {
+      width: 100%; height: 110px; background: var(--fill); border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm); color: var(--text); padding: 11px 13px; font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: vertical; margin-top: 6px; margin-bottom: 14px; line-height: 1.5;
+    }
+    .rule-textarea:focus { outline: none; border-color: var(--primary); }
+
+    #toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-12px);
+      background: color-mix(in srgb, var(--card-bg) 80%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid var(--card-border); padding: 11px 20px; border-radius: 999px;
+      box-shadow: var(--shadow-sm); z-index: 100; opacity: 0; pointer-events: none;
+      display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 500;
+      transition: all 0.35s var(--spring);
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast .toast-ic { display: inline-flex; align-items: center; flex-shrink: 0; }
+    #toast .toast-msg { white-space: nowrap; }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center; z-index: 90; padding: 20px;
+    }
+    .modal-card {
+      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius);
+      width: 90%; max-width: 520px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; }
+    .form-input {
+      width: 100%; padding: 10px 12px; background: var(--fill); border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 13px;
+    }
+    .form-input::placeholder { color: var(--text-muted); }
+    .form-input:focus { outline: none; border-color: var(--primary); }
+    select.form-input option { background: var(--card-bg); color: var(--text); }
+
+    @media (max-width: 768px) {
+      header { padding: 12px 16px; flex-wrap: wrap; }
+      .tabs-nav { margin-left: 16px; margin-right: 16px; width: auto; }
+      .tab-btn { flex: 1; justify-content: center; padding: 8px 8px; }
+      .container { padding: 0 16px; }
+      .mode-group { grid-template-columns: 1fr; }
+      .metrics-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ===== Global overflow & squeezing hardening ===== */
+    .card, .metric-box, .node-card, .sub-card, .mode-option, .band-item { box-sizing: border-box !important; max-width: 100% !important; min-width: 0 !important; }
+    .badge, .sub-badge, .proto-badge, .group-pill, .group-tag, .delay-tag,
+    .mode-title, .band-name, .sub-name, .node-title, .card-title > span,
+    #sub-stat-text, #node-count-badge, #badge-carrier, #badge-hw, #badge-proxy,
+    #badge-adblock, #badge-dns-engine, .switch-wrap, .switch, .search-box, .theme-toggle, .btn {
+      white-space: nowrap !important; flex-shrink: 0 !important; word-break: keep-all !important;
+    }
+    /* keep long button labels from being nowrap on mobile (handled in media query) */
+    .metrics-grid, .band-grid, .node-grid, .sub-grid, .mode-group { min-width: 0 !important; }
+    .metrics-grid > *, .band-grid > *, .node-grid > *, .sub-grid > *, .mode-group > * { min-width: 0 !important; }
+
+    /* ===== Signal / Hardware grids: responsive columns ===== */
+    /* desktop: signal metrics 4-col symmetric; hardware 4-col + WAN spans full row */
+    @media (min-width: 1024px) {
+      #tab-cell .card:nth-child(1) .metrics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+      .hd-card .metrics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    }
+    /* tablet / large phone: both grids -> 2 columns */
+    @media (max-width: 1023px) {
+      #tab-cell .card:nth-child(1) .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+      .hd-card .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+    }
+
+    /* ===== Mobile (<768px) ===== */
+    @media (max-width: 767px) {
+      body { scroll-padding-top: 96px; }
+      header { padding: 12px 16px; }
+      .container { padding: 0 16px; margin-top: 16px; }
+      .tabs-nav { margin: 16px 16px 0; width: auto; }
+      .card { padding: 18px 16px; }
+      .card-title { gap: 8px; }
+      .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+      .mode-group { grid-template-columns: 1fr; }
+    }
+
+    /* ===== Small mobile (<640px) ===== */
+    @media (max-width: 639px) {
+      .card-title { flex-wrap: wrap; gap: 8px; }
+      .card-title > span { white-space: normal !important; }
+      /* card header rows that use inline flex space-between should wrap */
+      .card [style*="justify-content: space-between"] { flex-wrap: wrap !important; }
+      /* long preset buttons wrap inside their own box (operator preset + band preset) */
+      .preset-row .btn {
+        max-width: 100% !important; white-space: normal !important; height: auto !important;
+        padding: 10px 14px !important; text-align: left; line-height: 1.4; flex: 1 1 auto; justify-content: flex-start;
+      }
+      .preset-row { align-items: stretch !important; }
+      .sub-grid { grid-template-columns: 1fr !important; }
+      /* signal metrics: 2 cols, cards clamp content */
+      #tab-cell .card:nth-child(1) .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+      #tab-cell .card:nth-child(1) .metric-box { overflow: hidden; word-break: break-word; }
+      /* hardware metrics: first 2 temps side-by-side; memory + load + WAN full width */
+      .hd-card .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+      .hd-card .metric-box { overflow: hidden; word-break: break-word; }
+      .hd-card .metric-box:nth-child(3),
+      .hd-card .metric-box:nth-child(4),
+      .hd-card .metric-box.wan-span { grid-column: 1 / -1 !important; }
+      .hd-card .metric-value { overflow-wrap: anywhere; }
+      #tab-rules .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+      #tab-rules .metric-box { padding: 10px; }
+      #tab-rules .metric-value { font-size: 14px !important; overflow-wrap: anywhere; word-break: break-word; }
+      .metric-value { font-size: 18px; }
+    }
+    /* DNS/badge headers: keep title row from squeezing badge into vertical text */
+    .card-title, .dns-head { flex-wrap: wrap; }
+    .dns-head > div { min-width: 0; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">5G</div>
+      <div class="brand-text">
+        <h1>Linksys FGW3000-HK 控制台</h1>
+        <p>高通 IPQ8074 + SDX55 | 极客定制版</p>
+      </div>
+    </div>
+    <div class="status-badges">
+      <div class="badge badge-green" id="badge-carrier">
+        <span class="badge-dot"></span>
+        <span id="carrier-text">蜂窝网络待机</span>
+      </div>
+      <div class="badge" id="badge-hw" style="background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); border: 1px solid var(--card-border);">
+        <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z"/></svg> CPU: <span id="hdr-cpu-temp">61</span>°C | 5G: <span id="hdr-modem-temp">50.6</span>°C</span>
+      </div>
+      <div class="badge badge-red" id="badge-proxy">
+        <span class="badge-dot"></span>
+        <span id="proxy-status-text">代理: 已停用</span>
+      </div>
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="切换深色 / 浅色" aria-label="切换深色或浅色模式">
+        <svg class="ic ic-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+        <svg class="ic ic-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="tabs-nav">
+    <button class="tab-btn active" onclick="switchTab('tab-cell', this)"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></svg> 蜂窝与锁频段</button>
+    <button class="tab-btn" onclick="switchTab('tab-proxy', this)"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> 全屋代理节点</button>
+    <button class="tab-btn" onclick="switchTab('tab-rules', this)"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg> 分流规则配置</button>
+  </nav>
+
+  <div class="container">
+
+    <!-- TAB 1: 蜂窝与锁频段 -->
+    <div id="tab-cell" class="tab-content active">
+      <div class="card">
+        <div class="card-title">
+          <span>当前蜂窝网络信号指标</span>
+          <button class="btn btn-secondary btn-sm" onclick="fetchCellular(true)"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> 立即刷新</button>
+        </div>
+        
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="metric-label">当前驻留频段 / 带宽</div>
+            <div class="metric-value" id="val-band" style="color: var(--primary);">5G n78 (100MHz 载波)</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">网络组网模式</div>
+            <div class="metric-value" id="val-sa-mode" style="font-size: 16px; color: var(--success);">5G SA 独立组网</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">信号接收功率 (RSRP)</div>
+            <div class="metric-value"><span id="val-rsrp">-86</span> <span class="metric-unit">dBm</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="pb-rsrp" style="width: 85%; background: var(--success);"></div></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">信号信噪比 (SINR)</div>
+            <div class="metric-value"><span id="val-sinr">26</span> <span class="metric-unit">dB</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="pb-sinr" style="width: 85%; background: var(--success);"></div></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">物理小区 ID (PCI)</div>
+            <div class="metric-value" id="val-pci">805</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">基站编号 (eNodeB ID)</div>
+            <div class="metric-value" id="val-enodeb">464F3</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">跟踪区码 (TAC)</div>
+            <div class="metric-value" id="val-tac">31761</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">当前接入点 (APN)</div>
+            <div class="metric-value" id="val-apn" style="font-size: 16px; color: var(--primary);">ctnet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg> 整机硬件监控与 5G 数据面统计 -->
+      <div class="card hd-card">
+        <div class="card-title">
+          <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg> 整机硬件监控与 5G 数据面统计</span>
+          <span class="card-subtitle">高通四核 IPQ8074A + SDX55 实时运行体征</span>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="metric-label">IPQ8074 CPU 温度</div>
+            <div class="metric-value"><span id="hw-cpu-temp">61</span> <span class="metric-unit">°C</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="pb-cpu-temp" style="width: 61%; background: var(--success);"></div></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">SDX55 5G 基带温度</div>
+            <div class="metric-value"><span id="hw-modem-temp">50.6</span> <span class="metric-unit">°C</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="pb-modem-temp" style="width: 50%; background: var(--success);"></div></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">系统内存占用</div>
+            <div class="metric-value"><span id="hw-mem-used">309</span>/<span id="hw-mem-total">870</span> <span class="metric-unit">MB (<span id="hw-mem-pct">35</span>%)</span></div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="pb-mem" style="width: 35%; background: var(--primary);"></div></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">系统负载（CPU 忙不忙）</div>
+            <div class="metric-value" style="font-size: 15px; align-items: center;">
+              <span id="hw-load-badge" class="load-badge load-ok">轻松</span>
+              <span id="hw-load-pct" style="font-size: 13px; color: var(--text-dim); font-weight: 500;">--</span>
+            </div>
+            <div class="load-sub" id="hw-load-detail">1分钟 -- · 5分钟 -- · 15分钟 --</div>
+            <div class="load-sub">连续运行: <span id="hw-uptime">1小时25分</span></div>
+          </div>
+          <div class="metric-box wan-span">
+            <div class="metric-label">5G WAN (rmnet_data0) 累计收发流量</div>
+            <div class="metric-value" style="font-size: 15px;">
+              <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> 接收: <strong id="hw-rx-traffic" style="color: var(--success);">777.4 MB</strong></span>
+              <span style="margin: 0 10px; color: var(--card-border);">|</span>
+              <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg> 发送: <strong id="hw-tx-traffic" style="color: var(--primary);">241.6 MB</strong></span>
+            </div>
+            <div style="font-size: 11px; color: var(--success); margin-top: 4px;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> 底层驱动 0 丢包 0 错误，TCP MSS PMTU 智能分片保护生效中</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>香港版 (FGW3000-HK) 专属可视化锁频段</span>
+          <span class="card-subtitle">精准锁定黄金频段，规避弱信号与拥堵基站</span>
+        </div>
+
+        <div style="margin-bottom: 10px; font-size: 13px; font-weight: 600;">1. 网络接入制式</div>
+        <div class="mode-group">
+          <div class="mode-option selected" id="mode-auto" onclick="selectNetMode('2')">
+            <div class="mode-title"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 5G/4G 自动混合 (默认)</div>
+            <div class="mode-desc">优先驻留 5G，无 5G 时自动平滑回落 4G</div>
+          </div>
+          <div class="mode-option" id="mode-5g" onclick="selectNetMode('13')">
+            <div class="mode-title"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> 仅 5G SA 独立组网</div>
+            <div class="mode-desc">强制锁定纯 5G 网络，拒绝掉入 4G</div>
+          </div>
+          <div class="mode-option" id="mode-4g" onclick="selectNetMode('1')">
+            <div class="mode-title"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></svg> 仅 4G LTE</div>
+            <div class="mode-desc">锁定纯 4G 网络，适合 5G 信号边缘区域</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 10px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between;">
+          <span>2. 5G NR 频段锁定 (多选)</span>
+          <span style="font-size: 11px; color: var(--text-dim);"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 主力频段：n78 (电信联通 100M 大容量) / n28 (移动 30M 广覆盖)</span>
+        </div>
+        <div class="band-grid" id="grid-5g">
+          <div class="band-item checked" data-band="78" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">n78 (3.5G)</span><span class="band-tag" style="color: var(--primary);"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg>电联主力 100M</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="28" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">n28 (700M)</span><span class="band-tag"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg>移动黄金覆盖</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="79" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">n79 (4.9G)</span><span class="band-tag"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg>移动大容量</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="1" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">n1 (2100M)</span><span class="band-tag" style="color: var(--success);">电联广覆盖</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="3" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">n3 (1800M)</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="5" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">n5 (850M)</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item disabled" title="香港版硬件无 n41 滤波器">
+            <div class="band-info"><span class="band-name" style="color: var(--text-muted);">n41 (2.6G)</span><span style="font-size: 10px; color: var(--danger);">港版硬件缺席</span></div>
+            <input type="checkbox" class="band-checkbox" disabled>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 10px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between;">
+          <span>3. 4G LTE 频段锁定 (多选)</span>
+          <span style="font-size: 11px; color: var(--text-dim);" id="tip-lte-band">主力覆盖频段: B1 / B3 / B8</span>
+        </div>
+        <div class="band-grid" id="grid-4g">
+          <div class="band-item checked" data-band="1" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">Band 1 (2.1G)</span><span class="band-tag" style="color: var(--primary);">电信/联通主力</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="3" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">Band 3 (1.8G)</span><span class="band-tag">三网主力FDD</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="8" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">Band 8 (900M)</span><span class="band-tag">移动/广电覆盖</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+          <div class="band-item checked" data-band="7" onclick="toggleBand(this)">
+            <div class="band-info"><span class="band-name">Band 7 (2.6G)</span></div>
+            <input type="checkbox" class="band-checkbox" checked>
+          </div>
+        </div>
+
+        <div class="preset-row" style="display: flex; gap: 10px; margin-top: 10px; align-items: center; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="applyBandLock()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> 应用并保存锁频</button>
+          <button class="btn btn-secondary" onclick="presetTelecomBands()" style="border-color: color-mix(in srgb, var(--primary) 45%, transparent); color: var(--primary);"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="currentColor" stroke="none"/></svg> 快速选中电信最佳频段</button>
+          <button class="btn btn-secondary" onclick="presetMobileBands()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 快速选中移动最佳频段</button>
+          <button class="btn btn-secondary" onclick="presetUnicomBands()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg> 快速选中联通最佳频段</button>
+          <button class="btn btn-secondary" onclick="resetAllBands()">全选所有频段</button>
+        </div>
+
+        <div class="preset-row" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--card-border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <span style="font-size: 12px; color: var(--text-dim); font-weight: 600;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 运营商预设一键切换：</span>
+          <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px; border-color: color-mix(in srgb, var(--primary) 45%, transparent); color: var(--primary);" onclick="switchCarrierProfile('ct')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 切换为【中国电信 5G SA 黄金频段】(ctnet / n78)</button>
+          <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;" onclick="switchCarrierProfile('cmcc')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/></svg> 切换为【中国移动 5G】(cmnet / n28)</button>
+          <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;" onclick="switchCarrierProfile('cu')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg> 切换为【中国联通 5G SA】(3gnet / n78)</button>
+          <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;" onclick="switchCarrierProfile('ct_4g')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg> 切换为【中国电信 4G 兼容模式】(ctnet)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: 全屋代理节点 -->
+    <div id="tab-proxy" class="tab-content">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="min-width: 0;">
+            <div style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">全屋透明代理 (Sing-box TUN)</div>
+            <div style="font-size: 12px; color: var(--text-dim);">支持 VLESS-Reality, Hysteria 2, TUIC v5, Shadowsocks, VMess, Trojan</div>
+          </div>
+          <div class="switch-wrap">
+            <span style="font-size: 13px; font-weight: 600;" id="toggle-label">代理已停用</span>
+            <label class="switch">
+              <input type="checkbox" id="proxy-switch" onchange="toggleProxyService(this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 2px;">当前活跃节点 / 实时出口 IP</div>
+            <div style="font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+              <span id="active-node-name" style="color: var(--primary);">未选定节点</span>
+              <span style="color: var(--text-muted);">|</span>
+              <span id="outbound-ip-display" style="color: var(--success); font-family: monospace;">点击右侧按钮检测</span>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="checkOutboundIp()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg> 检测出口 IP</button>
+        </div>
+      </div>
+
+
+      <!-- 订阅管理与分组卡片 -->
+      <div class="card">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> 机场订阅与分组管理</span>
+            <span class="card-subtitle" id="sub-stat-text">(已配置 0 个订阅)</span>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" id="btn-update-all-subs" onclick="updateAllSubscriptions()">
+              <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> 一键更新全部订阅
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="openAddSubModal()">
+              <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> 添加新订阅
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="openManualImportModal()">
+              <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> 导入单节点 / 二维码
+            </button>
+          </div>
+        </div>
+
+        <div class="sub-grid" id="subscriptions-container">
+          <!-- 动态渲染订阅卡片 -->
+        </div>
+      </div>
+
+      <!-- 节点列表与分组卡片 -->
+      <div class="card">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg> 代理节点列表</span>
+            <span class="card-subtitle" id="node-count-badge">共 0 个节点</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <div class="search-box">
+              <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" class="node-search-input" id="node-search-input" placeholder="搜索节点..." oninput="filterNodesBySearch(this.value)">
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="testCurrentGroupDelays()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 当前分组测速</button>
+            <button class="btn btn-secondary btn-sm" onclick="testAllDelays()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 测速全部</button>
+            <button class="btn btn-danger btn-sm" onclick="clearDeadNodes()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13 11 9-9"/><path d="M14.6 12.6c.8.8.9 2 .3 3L9.5 21 3 14.5l5.4-5.4c1-.6 2.2-.5 3 .3z"/></svg> 清理失效节点</button>
+          </div>
+        </div>
+
+        <!-- 分组筛选 Pill 栏 -->
+        <div class="group-filter-wrap" id="group-filter-container">
+          <!-- 动态渲染分组 Tab: 全部 / 订阅A / 订阅B / 自建 -->
+        </div>
+
+        <!-- 节点卡片列表 -->
+        <div class="node-grid" id="node-container">
+          <div style="grid-column: 1/-1; text-align: center; padding: 40px 0; color: var(--text-muted);">
+            暂无节点，请在上方添加订阅或导入节点。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: 分流规则配置 -->
+    <div id="tab-rules" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>流量分流策略模式</span>
+          <span class="card-subtitle">网页即时切换，支持自定义扩展规则</span>
+        </div>
+
+        <div class="mode-group" style="margin-bottom: 24px;">
+          <div class="mode-option selected" id="route-bypass_cn" onclick="selectRouteMode('bypass_cn')">
+            <div class="mode-title">绕过大陆 (推荐)</div>
+            <div class="mode-desc">国内域名和局域网极速直连，国外流量全部由代理节点出站</div>
+          </div>
+          <div class="mode-option" id="route-global" onclick="selectRouteMode('global')">
+            <div class="mode-title"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg> 全局代理</div>
+            <div class="mode-desc">除局域网外所有网络流量均经代理节点出站</div>
+          </div>
+          <div class="mode-option" id="route-direct" onclick="selectRouteMode('direct')">
+            <div class="mode-title"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 全部直连</div>
+            <div class="mode-desc">不使用节点转发，所有流量均由本地蜂窝网络直出</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">自定义【强制直连】域名列表 (每行一个，支持后缀如 baidu.com、bilibili.com、qq.com)</label>
+          <textarea class="rule-textarea" id="rule-direct-domains" placeholder="example.cn&#10;corp.local"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">自定义【强制代理】域名列表 (每行一个，如 google.com、github.com、openai.com、x.com)</label>
+          <textarea class="rule-textarea" id="rule-proxy-domains" placeholder="google.com&#10;github.com&#10;openai.com"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">自定义【强制直连】IP / CIDR 列表 (每行一个，如 223.5.5.5、119.29.29.29、114.114.114.114)</label>
+          <textarea class="rule-textarea" id="rule-direct-ips" placeholder="223.5.5.5&#10;119.29.29.29"></textarea>
+        </div>
+
+        <!-- SmartDNS 优选 & DNS 状态看板 -->
+        <div style="background: var(--fill); border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+          <div class="dns-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0;">
+              <span style="font-weight: 700; font-size: 14px; color: var(--success);"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg> SmartDNS 优选 &amp; DNS 状态</span>
+              <span class="badge badge-green" id="badge-dns-engine">双引擎运行中</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="restartSmartDnsFromUI()" style="padding: 4px 10px; font-size: 11px;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> 重启 SmartDNS 引擎</button>
+          </div>
+          <div class="metrics-grid" style="margin-bottom: 12px;">
+            <div class="metric-box">
+              <div class="metric-label">上游 DNS 优选</div>
+              <div class="metric-value" style="font-size: 15px; color: var(--primary);">并发测速</div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">国内公共 DNS 自动择优</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">备用/降级 DNS</div>
+              <div class="metric-value" style="font-size: 15px; color: var(--primary);">223.5.5.5</div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">SmartDNS 异常时自动兜底</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">本地 DNS 调度双引擎</div>
+              <div class="metric-value" style="font-size: 14px; color: var(--success);">SmartDNS + Dnsmasq</div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">端口: <strong>53 &amp; 6053</strong></div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-label">Anti-AD 实时拦截规则库</div>
+              <div class="metric-value" id="dns-rules-count" style="font-size: 15px; color: var(--warning);">--</div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">状态: <strong style="color: var(--success);">内存极速匹配</strong></div>
+            </div>
+          </div>
+          <div style="background: var(--fill); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--text);">
+            <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> <strong>DNS 优选状态</strong>：SmartDNS 并发优选国内公共 DNS，国内大流量业务直连走最优边缘节点；配合近 10 万条 Anti-AD 规则全屋去广告。
+          </div>
+        </div>
+
+        <!-- <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> 全屋广告与开屏广告智能拦截卡片 -->
+        <div style="background: var(--fill); border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+          <div class="dns-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0;">
+              <span style="font-weight: 700; font-size: 14px; color: var(--primary);"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> 全屋广告与开屏广告拦截 (AdBlock)</span>
+              <span class="badge badge-green" id="badge-adblock">已启用</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="adblock-switch" checked onchange="toggleAdblockSwitch(this.checked)">
+              <span class="slider round"></span>
+            </label>
+          </div>
+          <p style="font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-bottom: 12px;">
+            在路由器底层结合 <strong>Anti-AD（约 10 万条规则）</strong> 靶向秒拒第三方商业广告联盟 SDK（字节跳动穿山甲、腾讯优量汇、百度百青藤、快手联盟等），全面阻止隐私追踪、商业打点与广告素材加载。全屋手机/电视自动生效，不影响正常网页与视频播放。
+          </p>
+
+          <!-- <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> 为什么 B站、酷安等 App 依然有开屏广告？（原理解析与避坑指南） -->
+          <div style="background: color-mix(in srgb, var(--primary) 8%, transparent); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px; line-height: 1.6;">
+            <div style="font-weight: 700; color: var(--primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+              <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> 为什么 B站、酷安等 App 依然有开屏广告？（原理解析与避坑指南）</span>
+            </div>
+            <ul style="margin-left: 18px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px;">
+              <li><strong>第一方业务接口混载</strong>：B站（哔哩哔哩）、知乎等开屏物料直接从其核心 API（如 <code>app.bilibili.com</code>）下发，素材存放在 <code>hdslb.com</code> 等官方 CDN。路由器在 DNS 层面无法单独封禁广告而不破坏正常视频/图片播放。</li>
+              <li><strong>内置 HttpDNS / 强缓存</strong>：酷安等 App 内置了腾讯/阿里 HttpDNS（通过 HTTPS 直连 IP，如 <code>119.29.29.29</code>）绕过局域网 DNS，并将广告物料保存在手机内部持久化数据目录（仅清理系统“缓存 Cache”无法删除）。</li>
+              <li><strong>手机开启了“私人 DNS”</strong>：华为、小米、OPPO、vivo 等安卓系统若开启了“私人 DNS (DoT)”，手机请求会强制走公网 DoT 服务器，完全绕过路由器 SmartDNS。</li>
+            </ul>
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--fill-strong); color: var(--success); font-weight: 600;">
+              <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg> 完美去广告终极指南：
+              <span style="font-weight: normal; color: var(--text);">① 请将手机设置中的【私人 DNS / 安全 DNS】设为<strong>关闭</strong>；② 强烈建议配合手机端无障碍跳过工具（如<strong>李跳跳</strong>或 <strong>GKD</strong>），路由器负责阻断第三方数据追踪 + 客户端无障碍秒点跳过，实现完美开屏无感！</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+              <label class="form-label" style="margin-bottom: 0;">自定义拦截域名黑名单 (每行一个，支持直接编辑、粘贴或导入文件)</label>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button class="btn btn-secondary btn-sm" type="button" onclick="presetAdblockRules()" style="padding: 3px 10px; font-size: 11px;">
+                  <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg> 载入酷安及开屏推荐黑名单
+                </button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="importAdblockFromFile()" style="padding: 3px 10px; font-size: 11px;">
+                  <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> 导入规则文件 (.txt/.list)
+                </button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="runAdblockDiagnostic()" style="padding: 3px 10px; font-size: 11px; color: var(--primary);">
+                  <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg> 一键体检拦截效果
+                </button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="clearAdblockRules()" style="padding: 3px 10px; font-size: 11px; color: var(--danger);">
+                  <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 清空
+                </button>
+              </div>
+            </div>
+            <textarea class="rule-textarea" id="rule-blocked-ads" style="height: 130px;" placeholder="pangle.cn&#10;snssdk.com&#10;gdt.qq.com&#10;mobads.baidu.com"></textarea>
+            <input type="file" id="adblock-file-input" accept=".txt,.conf,.list,.yaml" style="display: none;" onchange="handleAdblockFileSelect(event)">
+            <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;">
+              <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> 提示：输入域名后缀（如 <code>pangle.cn</code>）自动秒拒其全部子域名。支持 Hosts / Dnsmasq / Clash 规则导入去重。</span>
+              <span id="adblock-count-tip" style="color: var(--primary); font-weight: 600;">当前规则数: 0</span>
+            </div>
+
+            <div id="adblock-diag-panel" style="display: none; margin-top: 14px; background: var(--fill-strong); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--primary);"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg> 国产核心广告联盟拦截与连通性即时体检</span>
+                <span id="adblock-diag-summary" style="font-size: 11px; color: var(--text-dim);">准备就绪</span>
+              </div>
+              <div id="adblock-diag-list" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="saveRoutingRules()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> 保存分流规则并热重载</button>
+          <button class="btn btn-secondary" onclick="resetRoutingRules()">恢复推荐默认分流</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 订阅管理弹窗 (添加/编辑) -->
+  <div class="modal-overlay" id="sub-modal" onclick="closeSubModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; font-weight: 700;" id="sub-modal-title">添加新订阅</h3>
+        <button onclick="closeSubModal()" style="background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer;">&times;</button>
+      </div>
+
+      <input type="hidden" id="sub-modal-id" value="">
+
+      <div class="form-group">
+        <label class="form-label">订阅分组备注名称</label>
+        <input type="text" class="form-input" id="sub-name-input" placeholder="例如: 主力机场、专线节点">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">订阅 URL 地址 (支持 Base64 / Clash / Sing-box / V2Ray 订阅链接)</label>
+        <input type="text" class="form-input" id="sub-url-input" placeholder="https://example.com/api/v1/client/subscribe?token=...">
+      </div>
+
+      <div class="form-group" style="margin-top: 10px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); cursor: pointer;">
+          <input type="checkbox" id="sub-filter-info-cb" checked style="accent-color: var(--primary);">
+          <span>自动过滤非节点卡片 (如「剩余流量」、「套餐到期」、「重置时间」等通知项)</span>
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button class="btn btn-secondary" style="flex: 1; justify-content: center;" onclick="closeSubModal()">取消</button>
+        <button class="btn btn-primary" id="btn-save-sub-modal" style="flex: 2; justify-content: center;" onclick="saveSubscriptionModal()">
+          <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> 保存并立即拉取节点
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 单节点/批量/二维码导入弹窗 -->
+  <div class="modal-overlay" id="manual-modal" onclick="closeManualImportModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; font-weight: 700;">导入单节点 / 批量节点</h3>
+        <button onclick="closeManualImportModal()" style="background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer;">&times;</button>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <button class="btn btn-sm btn-primary" id="btn-manual-tab-link" onclick="switchManualTab('link')">链接批量导入</button>
+        <button class="btn btn-sm btn-secondary" id="btn-manual-tab-qr" onclick="switchManualTab('qr')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg> 二维码图片导入</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">导入归属分组</label>
+        <select class="form-input" id="manual-group-select" style="background: var(--card-bg); cursor: pointer;">
+          <option value="自建/手动导入">自建/手动导入</option>
+        </select>
+      </div>
+
+      <div id="manual-link-wrap">
+        <div class="form-group">
+          <label class="form-label">粘贴节点分享链接 (支持 vless://, hysteria2://, hy2://, tuic://, trojan://, ss://, vmess://)</label>
+          <textarea class="form-input" id="raw-links-input" style="height: 120px; font-family: monospace;" placeholder="vless://...&#10;hysteria2://...&#10;ss://..."></textarea>
+        </div>
+        <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="parseRawLinks()">导入节点到该分组</button>
+      </div>
+
+      <div id="manual-qr-wrap" style="display: none;">
+        <div class="form-group">
+          <label class="form-label">上传或粘贴节点二维码图片 (支持点击选择、拖拽、或截图后按 Ctrl+V)</label>
+          <div id="qr-dropzone" style="border: 2px dashed var(--card-border); border-radius: 8px; padding: 26px; text-align: center; cursor: pointer; background: rgba(0,0,0,0.15);" onclick="document.getElementById('qr-file-input').click()">
+            <div style="font-size: 32px; margin-bottom: 8px;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg></div>
+            <div style="font-size: 13px; color: var(--text); font-weight: 600;">点击选择二维码图片 或 拖拽图片至此处</div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px;">支持任意页面直接截图后按 Ctrl+V 粘贴</div>
+          </div>
+          <input type="file" id="qr-file-input" accept="image/*" style="display: none;" onchange="handleQrFile(event)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"><span class="toast-ic" id="toast-ic"></span><span class="toast-msg" id="toast-msg"></span></div>
+
+  <script>
+    // ===== theme (light/dark) with manual toggle + system fallback =====
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('fgw-theme'); } catch (e) {}
+      if (saved === 'dark' || saved === 'light') {
+        document.documentElement.setAttribute('data-theme', saved);
+      }
+    })();
+    function toggleTheme() {
+      var root = document.documentElement;
+      var cur = root.getAttribute('data-theme');
+      if (!cur) {
+        // currently following system -> go to the opposite
+        var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        cur = sysDark ? 'dark' : 'light';
+      }
+      var next = cur === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('fgw-theme', next); } catch (e) {}
+    }
+
+    const TOAST_ICON_OK = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01"/><path d="M22 8h.01"/><path d="M15 2h.01"/><path d="M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></svg>';
+    let currentCellular = {};
+    let selectedNetMode = '2';
+    let currentRouteMode = 'bypass_cn';
+    let proxyRunning = false;
+    let activeNodeTag = '';
+    let subscriptionsList = [];
+    let nodesList = [];
+    let currentGroupFilter = 'all';
+    let searchKeyword = '';
+    let isUpdatingSubs = false;
+    const PRESET_ADBLOCK_DOMAINS = [
+      // 酷安自身开屏与打点追踪 (保持应用核心功能可用，秒跳开屏)
+      "tracking.coolapk.com", "analytics.coolapk.com", "splash.coolapk.com", "log.coolapk.com",
+      // 哔哩哔哩 (Bilibili) 开屏广告、商业化打点与内置 HTTPDNS (秒过启动页开屏，不影响正常刷视频与直播)
+      "cm.bilibili.com", "ad.bilibili.com", "e.bilibili.com", "data.bilibili.com",
+      "track.bilibili.com", "activity.hdslb.com", "httpdns.bilibili.com",
+      // 字节跳动穿山甲广告联盟与巨量引擎 (抖音直播推广/开屏/商业化广告)
+      "pangle.cn", "pangolin-sdk-toutiao.com", "pangolin-sdk-toutiao1.com", "pangolin.snssdk.com",
+      "oceanengine.com", "ad.oceanengine.com", "ad.douyin.com", "e.douyin.com", "ad.toutiao.com",
+      "toblog.ctobsnssdk.com", "mon.snssdk.com", "is.snssdk.com", "bytegoofy.com",
+      "lf6-cdn-tos.bytegoofy.com", "lf9-cdn-tos.bytegoofy.com", "lf3-cdn-tos.bytegoofy.com",
+      // 腾讯优量汇广告联盟
+      "gdt.qq.com", "mi.gdt.qq.com", "win.gdt.qq.com", "qzs.qq.com", "tmead.y.qq.com", "e.qq.com",
+      "pgdt.gtimg.cn", "splashqzs.qq.com",
+      // 百度百青藤广告联盟
+      "mobads.baidu.com", "mobads-logs.baidu.com", "pos.baidu.com", "cpro.baidu.com", "cbjs.baidu.com",
+      // 快手广告联盟
+      "e.kuaishou.com", "open.e.kuaishou.com", "ad.partner.gifshow.com",
+      // 酷安等 App 常用聚合开屏联盟 (SigMob风铃, 倍孜Beizi, TopOn, Gromore)
+      "sigmob.cn", "sigmob.com", "adservice.sigmob.cn", "beizi.biz", "toponad.com", "gromore.cn", "ad.snssdk.com",
+      // 常见 HTTPDNS 域名 (防 App 绕过路由 DNS 强拉广告)
+      "httpdns.alicdn.com", "httpdns.baidubce.com"
+    ];
+
+    let customRules = {
+      direct_domains: ["baidu.com", "bilibili.com", "qq.com", "163.com", "taobao.com", "jd.com", "weibo.com", "zhihu.com", "coolapk.com", "coolapkmarket.net", "coolapkmarket.com", "douyin.com"],
+      proxy_domains: ["google.com", "youtube.com", "github.com", "telegram.org", "twitter.com", "x.com", "openai.com", "instagram.com"],
+      direct_ips: ["223.5.5.5", "119.29.29.29", "114.114.114.114"],
+      proxy_ips: [],
+      adblock_enabled: true,
+      blocked_ads_domains: PRESET_ADBLOCK_DOMAINS.slice()
+    };
+
+    function switchTab(tabId, el) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      if (el) el.classList.add('active');
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add('active');
+    }
+
+    function showToast(msg, type='info', iconSvg='') {
+      const t = document.getElementById('toast');
+      const icEl = document.getElementById('toast-ic');
+      const msgEl = document.getElementById('toast-msg');
+      icEl.innerHTML = iconSvg || '';
+      icEl.style.display = iconSvg ? 'inline-flex' : 'none';
+      msgEl.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(t._tid);
+      t._tid = setTimeout(() => { t.classList.remove('show'); }, 3200);
+    }
+
+    async function fetchCellular(isManual=false) {
+      try {
+        const res = await fetch('/weblog/api.cgi?action=get_cellular');
+        const data = await res.json();
+        if (data.success && data.cellular) {
+          const c = data.cellular;
+          const sys = data.system || {};
+          currentCellular = c;
+          
+          // 1. Band & Bandwidth display
+          const bwText = (c.nr_bandwidth && c.nr_bandwidth !== '0') ? ` (${c.nr_bandwidth}MHz 载波)` : '';
+          document.getElementById('val-band').innerHTML = `${c.nr_band !== 'N/A' ? '5G n' + c.nr_band + bwText : 'LTE B' + c.band}`;
+          
+          // 2. Network Mode / SA status
+          const saEl = document.getElementById('val-sa-mode');
+          if (saEl) {
+            if (c.nr_band !== 'N/A') {
+              saEl.innerHTML = `<span style="color: var(--success);">5G SA 独立组网</span>`;
+            } else if (c.band !== 'N/A') {
+              saEl.innerHTML = `<span style="color: var(--primary);">4G LTE</span>`;
+            } else {
+              saEl.textContent = '搜网中...';
+            }
+          }
+
+          // 3. Signal metrics & Progress bars (Fixing the 4G vs 5G bug!)
+          const activeRsrp = (c.nr_rsrp && c.nr_rsrp !== 'N/A') ? parseInt(c.nr_rsrp) : parseInt(c.lte_rsrp);
+          const activeSinr = (c.nr_snr && c.nr_snr !== 'N/A') ? parseInt(c.nr_snr) : parseInt(c.lte_sinr);
+          
+          document.getElementById('val-rsrp').textContent = !isNaN(activeRsrp) ? activeRsrp : '-';
+          document.getElementById('val-sinr').textContent = !isNaN(activeSinr) ? activeSinr : '-';
+          document.getElementById('val-enodeb').textContent = c.enodeb_id || '-';
+          document.getElementById('val-pci').textContent = (c.nr_pcid !== 'N/A' ? c.nr_pcid : c.real_cell_id) || '-';
+          document.getElementById('val-tac').textContent = c.tac || '-';
+          if (document.getElementById('val-apn')) {
+            document.getElementById('val-apn').textContent = c.apn || 'ctnet';
+          }
+          
+          // 4. Operator Identification
+          let op = '移动通信';
+          if (['46000', '46002', '46007', '46008'].includes(c.plmnid)) op = '中国移动 CMCC';
+          else if (['46001', '46006', '46009'].includes(c.plmnid)) op = '中国联通 CU';
+          else if (['46003', '46005', '46011'].includes(c.plmnid)) op = '中国电信 CT';
+          else if (['46015'].includes(c.plmnid)) op = '中国广电 CBN';
+          
+          const netTypeStr = c.nr_band !== 'N/A' ? `5G n${c.nr_band} SA` : `4G B${c.band}`;
+          document.getElementById('carrier-text').textContent = `${op} (${netTypeStr})`;
+
+          // 5. Correct Progress bars
+          const rsrpNum = !isNaN(activeRsrp) ? activeRsrp : -100;
+          const pctRsrp = Math.min(100, Math.max(10, (rsrpNum + 130) * 1.5));
+          const pbRsrp = document.getElementById('pb-rsrp');
+          if (pbRsrp) {
+            pbRsrp.style.width = pctRsrp + '%';
+            pbRsrp.style.background = rsrpNum > -85 ? 'var(--success)' : (rsrpNum > -105 ? 'var(--warning)' : 'var(--danger)');
+          }
+
+          const sinrNum = !isNaN(activeSinr) ? activeSinr : 0;
+          const pctSinr = Math.min(100, Math.max(10, (sinrNum + 5) * 3));
+          const pbSinr = document.getElementById('pb-sinr');
+          if (pbSinr) {
+            pbSinr.style.width = pctSinr + '%';
+            pbSinr.style.background = sinrNum > 15 ? 'var(--success)' : (sinrNum > 5 ? 'var(--warning)' : 'var(--danger)');
+          }
+
+          // 6. System & Hardware Metrics
+          if (sys.cpu_temp) {
+            const el = document.getElementById('hw-cpu-temp');
+            if (el) el.textContent = sys.cpu_temp;
+            const hdrEl = document.getElementById('hdr-cpu-temp');
+            if (hdrEl) hdrEl.textContent = sys.cpu_temp;
+            const pb = document.getElementById('pb-cpu-temp');
+            if (pb) pb.style.width = Math.min(100, sys.cpu_temp) + '%';
+          }
+          if (sys.modem_temp) {
+            const el = document.getElementById('hw-modem-temp');
+            if (el) el.textContent = sys.modem_temp;
+            const hdrEl = document.getElementById('hdr-modem-temp');
+            if (hdrEl) hdrEl.textContent = sys.modem_temp;
+            const pb = document.getElementById('pb-modem-temp');
+            if (pb) pb.style.width = Math.min(100, parseFloat(sys.modem_temp)) + '%';
+          }
+          if (sys.mem_used && sys.mem_total) {
+            const usedEl = document.getElementById('hw-mem-used');
+            if (usedEl) usedEl.textContent = sys.mem_used;
+            const totEl = document.getElementById('hw-mem-total');
+            if (totEl) totEl.textContent = sys.mem_total;
+            const pctEl = document.getElementById('hw-mem-pct');
+            if (pctEl) pctEl.textContent = sys.mem_pct;
+            const pb = document.getElementById('pb-mem');
+            if (pb) pb.style.width = sys.mem_pct + '%';
+          }
+          if (sys.load_avg) {
+            renderLoad(sys.load_avg);
+          }
+          if (sys.uptime_sec) {
+            const sec = parseInt(sys.uptime_sec) || 0;
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const upEl = document.getElementById('hw-uptime');
+            if (upEl) upEl.textContent = `${h}小时${m}分`;
+          }
+          if (sys.wan_rx_mb && sys.wan_tx_mb) {
+            const rxEl = document.getElementById('hw-rx-traffic');
+            if (rxEl) rxEl.textContent = sys.wan_rx_mb + ' MB';
+            const txEl = document.getElementById('hw-tx-traffic');
+            if (txEl) txEl.textContent = sys.wan_tx_mb + ' MB';
+          }
+          if (sys.smartdns_rules) {
+            const rEl = document.getElementById('dns-rules-count');
+            if (rEl) rEl.textContent = Number(sys.smartdns_rules).toLocaleString() + ' 条';
+          }
+
+          if (!hasSyncedBands && c.lte_full_band) {
+            updateBandCheckboxesFromConfig(c.lte_full_band, c.nr_full_band);
+            hasSyncedBands = true;
+          }
+
+          if (!isManual && c.net_mode) {
+            selectNetMode(c.net_mode);
+          }
+        }
+        if (isManual) showToast('基带信号指标刷新成功', 'success');
+      } catch (e) {
+        if (isManual) showToast('获取蜂窝数据失败', 'error');
+      }
+    }
+
+    let hasSyncedBands = false;
+    function updateBandCheckboxesFromConfig(lteBandsStr, nrBandsStr) {
+      if (lteBandsStr && lteBandsStr !== 'N/A') {
+        const activeLte = lteBandsStr.split(',').map(s => s.trim());
+        document.querySelectorAll('#grid-4g .band-item:not(.disabled)').forEach(el => {
+          const b = el.getAttribute('data-band');
+          const isChecked = activeLte.includes(b);
+          el.classList.toggle('checked', isChecked);
+          const cb = el.querySelector('input');
+          if (cb) cb.checked = isChecked;
+        });
+      }
+      if (nrBandsStr && nrBandsStr !== 'N/A') {
+        const activeNr = nrBandsStr.split(',').map(s => s.trim());
+        document.querySelectorAll('#grid-5g .band-item:not(.disabled)').forEach(el => {
+          const b = el.getAttribute('data-band');
+          const isChecked = activeNr.includes(b);
+          el.classList.toggle('checked', isChecked);
+          const cb = el.querySelector('input');
+          if (cb) cb.checked = isChecked;
+        });
+      }
+    }
+
+    function selectNetMode(mode) {
+      selectedNetMode = mode;
+      document.querySelectorAll('#tab-cell .mode-group .mode-option').forEach(el => el.classList.remove('selected'));
+      if (mode === '2') document.getElementById('mode-auto').classList.add('selected');
+      else if (mode === '13') document.getElementById('mode-5g').classList.add('selected');
+      else if (mode === '1') document.getElementById('mode-4g').classList.add('selected');
+    }
+
+    function toggleBand(el) {
+      if (el.classList.contains('disabled')) return;
+      el.classList.toggle('checked');
+      const cb = el.querySelector('input');
+      if (cb) cb.checked = el.classList.contains('checked');
+    }
+
+    function presetTelecomBands() {
+      // 5G: n78 (3.5G主力), n1 (2.1G广覆盖), n5 (850M)
+      document.querySelectorAll('#grid-5g .band-item:not(.disabled)').forEach(el => {
+        const b = el.getAttribute('data-band');
+        const isTarget = (b === '78' || b === '1' || b === '5');
+        el.classList.toggle('checked', isTarget);
+        el.querySelector('input').checked = isTarget;
+      });
+      // 4G: Band 1 (2.1G), Band 3 (1.8G)
+      document.querySelectorAll('#grid-4g .band-item:not(.disabled)').forEach(el => {
+        const b = el.getAttribute('data-band');
+        const isTarget = (b === '1' || b === '3');
+        el.classList.toggle('checked', isTarget);
+        el.querySelector('input').checked = isTarget;
+      });
+      showToast('已选中中国电信黄金频段 (5G n78/n1 & 4G B1/B3)', 'success');
+    }
+
+    function presetMobileBands() {
+      document.querySelectorAll('#grid-5g .band-item:not(.disabled)').forEach(el => {
+        const b = el.getAttribute('data-band');
+        const isTarget = (b === '28' || b === '79');
+        el.classList.toggle('checked', isTarget);
+        el.querySelector('input').checked = isTarget;
+      });
+      document.querySelectorAll('#grid-4g .band-item:not(.disabled)').forEach(el => {
+        const b = el.getAttribute('data-band');
+        const isTarget = (b === '3' || b === '8');
+        el.classList.toggle('checked', isTarget);
+        el.querySelector('input').checked = isTarget;
+      });
+      showToast('已选中中国移动最佳黄金频段 (n28/n79 & B3/B8)', 'success');
+    }
+
+    function presetUnicomBands() {
+      // 5G: n78 (3.5G主力), n1 (2.1G)
+      document.querySelectorAll('#grid-5g .band-item:not(.disabled)').forEach(el => {
+        const b = el.getAttribute('data-band');
+        const isTarget = (b === '78' || b === '1');
+        el.classList.toggle('checked', isTarget);
+        el.querySelector('input').checked = isTarget;
+      });
+      // 4G: Band 1, Band 3
+      document.querySelectorAll('#grid-4g .band-item:not(.disabled)').forEach(el => {
+        const b = el.getAttribute('data-band');
+        const isTarget = (b === '1' || b === '3');
+        el.classList.toggle('checked', isTarget);
+        el.querySelector('input').checked = isTarget;
+      });
+      showToast('已选中中国联通黄金频段 (5G n78/n1 & 4G B1/B3)', 'success');
+    }
+
+    function resetAllBands() {
+      document.querySelectorAll('.band-item:not(.disabled)').forEach(el => {
+        el.classList.add('checked');
+        el.querySelector('input').checked = true;
+      });
+      showToast('已全选所有支持频段', 'info');
+    }
+
+    async function applyBandLock() {
+      const nrBands = Array.from(document.querySelectorAll('#grid-5g .band-item.checked')).map(el => el.getAttribute('data-band')).join(',');
+      const lteBands = Array.from(document.querySelectorAll('#grid-4g .band-item.checked')).map(el => el.getAttribute('data-band')).join(',');
+
+      if (!lteBands) { showToast('4G 频段不可为空', 'error'); return; }
+
+      showToast('正在应用频段设置并重载基带...', 'info');
+      try {
+        const res = await fetch('/weblog/api.cgi?action=set_bands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `mode=${selectedNetMode}&lte_bands=${lteBands}&nr_bands=${nrBands}`
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('锁频成功生效！基带正在重连...', 'success');
+          setTimeout(() => fetchCellular(true), 4000);
+        } else {
+          showToast('应用失败: ' + (data.error || '未知原因'), 'error');
+        }
+      } catch (e) {
+        showToast('请求发送失败', 'error');
+      }
+    }
+
+    async function switchCarrierProfile(op) {
+      const names = {
+        'ct': '中国电信 5G SA 黄金频段 (ctnet / n78)',
+        'cmcc': '中国移动 5G (cmnet / n28)',
+        'cu': '中国联通 5G SA (3gnet / n78)',
+        'ct_4g': '中国电信 4G 兼容模式 (ctnet)'
+      };
+      showToast(`正在切换为【${names[op] || op}】并配置 APN...`, 'info');
+      try {
+        const res = await fetch(`/weblog/api.cgi?action=set_carrier&op=${op}`);
+        const data = await res.json();
+        if (data.success) {
+          showToast('参数下发成功！基带正在重新协商网络...', 'success');
+          setTimeout(() => fetchCellular(true), 5000);
+        } else {
+          showToast('切换失败', 'error');
+        }
+      } catch (e) {
+        showToast('请求发送失败: ' + e, 'error');
+      }
+    }
+
+    async function restartSmartDnsFromUI() {
+      showToast('正在重启 SmartDNS 核心引擎...', 'info');
+      try {
+        const resp = await fetch('/weblog/api.cgi?action=smartdns_restart');
+        const data = await resp.json();
+        if (data.success) {
+          showToast('SmartDNS 已成功重启并重新载入上游！', 'success');
+          setTimeout(() => fetchCellular(true), 1500);
+        } else {
+          showToast('重启失败: ' + (data.error || '未知错误'), 'error');
+        }
+      } catch (e) {
+        showToast('请求失败: ' + e, 'error');
+      }
+    }
+
+    async function loadProxyConfig() {
+      try {
+        const res = await fetch('/weblog/api.cgi?action=proxy_status');
+        const data = await res.json();
+        if (data.success) {
+          proxyRunning = data.running;
+          document.getElementById('proxy-switch').checked = proxyRunning;
+          document.getElementById('toggle-label').textContent = proxyRunning ? '代理运行中 (TUN)' : '代理已停用';
+          
+          const pb = document.getElementById('badge-proxy');
+          if (proxyRunning) {
+            pb.className = 'badge badge-green';
+            document.getElementById('proxy-status-text').textContent = '代理: 运行中';
+          } else {
+            pb.className = 'badge badge-red';
+            document.getElementById('proxy-status-text').textContent = '代理: 已停用';
+          }
+
+          if (data.config) {
+            subscriptionsList = (data.config.subscriptions || []).map((sub, idx) => ({
+              ...sub,
+              id: sub.id || ('sub_' + (idx + 1))
+            }));
+            nodesList = data.config.nodes || [];
+            activeNodeTag = data.config.active_node || (nodesList[0] ? nodesList[0].tag : '');
+            currentRouteMode = data.config.route_mode || 'bypass_cn';
+            if (data.config.custom_rules) {
+              customRules = Object.assign({}, customRules, data.config.custom_rules);
+              if (!customRules.blocked_ads_domains || !customRules.blocked_ads_domains.length) {
+                customRules.blocked_ads_domains = PRESET_ADBLOCK_DOMAINS.slice();
+              }
+            }
+
+            // Group normalization for legacy or untagged nodes
+            nodesList.forEach(n => {
+              if (!n.sub_id && !n.group) {
+                if (subscriptionsList.length > 0) {
+                  n.group = subscriptionsList[0].name;
+                  n.sub_id = subscriptionsList[0].id;
+                } else {
+                  n.group = '自建/手动导入';
+                  n.sub_id = 'manual';
+                }
+              } else if (!n.group && n.sub_id) {
+                const s = subscriptionsList.find(x => x.id === n.sub_id);
+                n.group = s ? s.name : '自建/手动导入';
+              } else if (n.group && !n.sub_id) {
+                const s = subscriptionsList.find(x => x.name === n.group);
+                n.sub_id = s ? s.id : 'manual';
+              }
+            });
+
+            // Recalculate subscription node counts
+            subscriptionsList.forEach(s => {
+              s.node_count = nodesList.filter(n => n.sub_id === s.id || n.group === s.name).length;
+            });
+
+            const an = document.getElementById('active-node-name');
+            if (an) an.textContent = dispName(activeNodeTag) || '未选定节点';
+            if (proxyRunning) checkOutboundIp();
+
+            selectRouteMode(currentRouteMode, false);
+            populateRulesInputs();
+            renderSubscriptions();
+            renderGroupFilters();
+            renderNodes();
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load proxy status', e);
+      }
+    }
+
+    async function checkOutboundIp() {
+      const el = document.getElementById('outbound-ip-display');
+      if (el) el.textContent = '检测中...';
+      try {
+        const res = await fetch('/weblog/api.cgi?action=get_outbound_ip');
+        const data = await res.json();
+        if (data.success && data.proxy_ip) {
+          if (el) el.textContent = data.proxy_ip;
+        } else {
+          if (el) el.textContent = '获取失败';
+        }
+      } catch (e) {
+        if (el) el.textContent = '连接异常';
+      }
+    }
+
+
+    async function toggleProxyService(enable) {
+      showToast(enable ? '正在启动全屋透明代理 (加载 TUN)...' : '正在停止代理服务...', 'info');
+      try {
+        const res = await fetch('/weblog/api.cgi?action=proxy_toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `enable=${enable ? 1 : 0}`
+        });
+        const data = await res.json();
+        if (data.success) {
+          proxyRunning = enable;
+          document.getElementById('proxy-switch').checked = enable;
+          document.getElementById('toggle-label').textContent = enable ? '代理运行中 (TUN)' : '代理已停用';
+          const pb = document.getElementById('badge-proxy');
+          if (pb) {
+            pb.className = enable ? 'badge badge-green' : 'badge badge-red';
+            document.getElementById('proxy-status-text').textContent = enable ? '代理: 运行中' : '代理: 已停用';
+          }
+          if (!enable) {
+            const outEl = document.getElementById('outbound-ip-display');
+            if (outEl) outEl.textContent = '已停用';
+          }
+          showToast(enable ? '全屋代理已成功启动！' : '代理已安全关闭 (TUN 已完全卸载)', 'success');
+          loadProxyConfig();
+        } else {
+          showToast('操作失败: ' + (data.error || '未知错误'), 'error');
+          document.getElementById('proxy-switch').checked = !enable;
+        }
+      } catch (e) {
+        showToast('无法连接路由器后端', 'error');
+      }
+    }
+
+    function formatCurrentTime() {
+      const d = new Date();
+      const pad = n => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function copyText(text) {
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => showToast('已复制订阅链接到剪贴板', 'success')).catch(() => fallbackCopy(text));
+      } else {
+        fallbackCopy(text);
+      }
+    }
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('已复制订阅链接到剪贴板', 'success');
+    }
+
+    function renderSubscriptions() {
+      const container = document.getElementById('subscriptions-container');
+      const statText = document.getElementById('sub-stat-text');
+      if (statText) statText.textContent = `(已配置 ${subscriptionsList.length} 个订阅)`;
+
+      if (!subscriptionsList || subscriptionsList.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 26px 20px; background: rgba(0,0,0,0.15); border: 1px dashed var(--card-border); border-radius: 8px;">
+            <div style="font-size: 26px; margin-bottom: 6px;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></div>
+            <div style="font-size: 13px; color: var(--text); font-weight: 600;">暂无配置的机场订阅</div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px; margin-bottom: 12px;">添加订阅链接后可实现自动分组管理，并支持一键更新全部节点</div>
+            <button class="btn btn-primary btn-sm" onclick="openAddSubModal()"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> 立即添加首个订阅</button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = subscriptionsList.map((sub, idx) => {
+        const subId = sub.id || ('sub_' + (idx + 1));
+        sub.id = subId;
+        const subNodes = nodesList.filter(n => n.sub_id === subId || n.group === sub.name);
+        const nodeCount = subNodes.length;
+        const updatedTime = sub.updated_at || sub.updated || '未更新';
+        return `
+          <div class="sub-card">
+            <div>
+              <div class="sub-header">
+                <div class="sub-name">
+                  <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>
+                  <span>${dispHtml(sub.name)}</span>
+                </div>
+                <span class="sub-badge">${nodeCount} 个节点</span>
+              </div>
+              <div class="sub-url-box" title="点击复制订阅链接: ${escapeHtml(sub.url)}" onclick="copyText('${escapeHtml(sub.url)}')">
+                <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ${escapeHtml(sub.url)}
+              </div>
+            </div>
+            <div>
+              <div class="sub-meta">
+                <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 上次更新: ${escapeHtml(updatedTime)}</span>
+              </div>
+              <div class="sub-actions" style="margin-top: 10px;">
+                <button class="btn btn-primary btn-sm" onclick="updateSubscription('${subId}')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> 更新订阅</button>
+                <button class="btn btn-secondary btn-sm" onclick="selectGroupFilter('${escapeHtml(sub.name)}')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> 查看此组</button>
+                <button class="btn btn-secondary btn-sm" onclick="testGroupDelays('${subId}')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 组内测速</button>
+                <button class="btn btn-secondary btn-sm" onclick="openEditSubModal('${subId}')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg> 编辑</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteSubscription('${subId}')"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderGroupFilters() {
+      const container = document.getElementById('group-filter-container');
+      if (!container) return;
+
+      const groups = new Map();
+      subscriptionsList.forEach(s => {
+        const cnt = nodesList.filter(n => n.sub_id === s.id || n.group === s.name).length;
+        groups.set(s.name, { id: s.id, name: s.name, count: cnt, isSub: true });
+      });
+      nodesList.forEach(n => {
+        const g = n.group || '自建/手动导入';
+        if (!groups.has(g)) {
+          const cnt = nodesList.filter(x => (x.group || '自建/手动导入') === g).length;
+          groups.set(g, { id: n.sub_id || 'manual', name: g, count: cnt, isSub: false });
+        }
+      });
+
+      const pills = [];
+      const allActive = currentGroupFilter === 'all';
+      pills.push(`
+        <div class="group-pill ${allActive ? 'active' : ''}" onclick="selectGroupFilter('all')">
+          <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg> 全部节点</span>
+          <span class="group-pill-count">${nodesList.length}</span>
+        </div>
+      `);
+
+      for (const [name, info] of groups) {
+        const isActive = currentGroupFilter === name;
+        pills.push(`
+          <div class="group-pill ${isActive ? 'active' : ''}" onclick="selectGroupFilter('${escapeHtml(name)}')">
+            <span>${info.isSub ? '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>' : '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>'} ${dispHtml(name)}</span>
+            <span class="group-pill-count">${info.count}</span>
+          </div>
+        `);
+      }
+
+      if (currentGroupFilter !== 'all') {
+        const curInfo = groups.get(currentGroupFilter);
+        const count = curInfo ? curInfo.count : 0;
+        pills.push(`
+          <button class="btn btn-danger btn-sm" style="margin-left: auto; padding: 6px 14px; font-size: 12px;" onclick="deleteCurrentGroup('${escapeHtml(currentGroupFilter)}')">
+            <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除「${escapeHtml(currentGroupFilter)}」分组 (${count}节点)
+          </button>
+        `);
+      }
+
+      container.innerHTML = pills.join('');
+      updateManualGroupSelect(groups);
+    }
+
+    function updateManualGroupSelect(groups) {
+      const sel = document.getElementById('manual-group-select');
+      if (!sel) return;
+      const cur = sel.value;
+      let opts = '<option value="自建/手动导入">自建/手动导入</option>';
+      for (const [name, info] of groups) {
+        if (name !== '自建/手动导入') {
+          opts += `<option value="${escapeHtml(name)}">${dispHtml(name)}</option>`;
+        }
+      }
+      sel.innerHTML = opts;
+      if (cur) sel.value = cur;
+    }
+
+    function selectGroupFilter(grp) {
+      currentGroupFilter = grp;
+      renderGroupFilters();
+      renderNodes();
+    }
+
+    function deleteCurrentGroup(groupName) {
+      if (!groupName || groupName === 'all') return;
+      const sub = subscriptionsList.find(s => s.name === groupName || s.id === groupName);
+      const grpNodes = nodesList.filter(n => (n.group || '自建/手动导入') === groupName || (sub && n.sub_id === sub.id));
+      
+      const msg = `确定要彻底删除分组「${groupName}」吗？\n\n将同时删除该分组下的全部 ${grpNodes.length} 个节点${sub ? '及对应订阅配置' : ''}。\n点击「确定」继续，点击「取消」放弃。`;
+      if (!confirm(msg)) return;
+
+      nodesList = nodesList.filter(n => (n.group || '自建/手动导入') !== groupName && (!sub || n.sub_id !== sub.id));
+      if (sub) {
+        subscriptionsList = subscriptionsList.filter(s => s.id !== sub.id && s.name !== sub.name);
+      }
+
+      currentGroupFilter = 'all';
+      const nodeTags = nodesList.map(n => n.tag);
+      if (!nodeTags.includes(activeNodeTag)) {
+        activeNodeTag = nodeTags[0] || '';
+      }
+
+      renderSubscriptions();
+      renderGroupFilters();
+      renderNodes();
+      saveFullProxyConfig(true);
+      showToast(`已成功删除分组「${groupName}」及其 ${grpNodes.length} 个节点`, 'success');
+    }
+
+    function filterNodesBySearch(kw) {
+      searchKeyword = (kw || '').trim().toLowerCase();
+      renderNodes();
+    }
+
+    function renderNodes() {
+      const container = document.getElementById('node-container');
+      const badge = document.getElementById('node-count-badge');
+
+      let filtered = nodesList;
+      if (currentGroupFilter !== 'all') {
+        filtered = filtered.filter(n => (n.group === currentGroupFilter) || (n.sub_id === currentGroupFilter));
+      }
+      if (searchKeyword) {
+        filtered = filtered.filter(n => {
+          const t = (n.tag || '').toLowerCase();
+          const s = (n.server || '').toLowerCase();
+          const p = (n.type || '').toLowerCase();
+          const g = (n.group || '').toLowerCase();
+          return t.includes(searchKeyword) || s.includes(searchKeyword) || p.includes(searchKeyword) || g.includes(searchKeyword);
+        });
+      }
+
+      if (badge) {
+        badge.textContent = `共 ${nodesList.length} 个节点${currentGroupFilter !== 'all' || searchKeyword ? ` (当前筛选出 ${filtered.length} 个)` : ''}`;
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 40px 0; color: var(--text-muted);">
+            ${nodesList.length === 0 ? '暂无可用节点，请在上方添加订阅或导入节点。' : '当前分组或搜索条件下未找到匹配的节点。'}
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(node => {
+        const isActive = node.tag === activeNodeTag;
+        const groupName = node.group || '自建/手动';
+        return `
+          <div class="node-card ${isActive ? 'active' : ''}" onclick="switchActiveNode('${escapeHtml(node.tag)}')">
+            <div class="node-header">
+              <div class="node-title" title="${escapeHtml(node.tag)}">${dispHtml(node.tag)}</div>
+              <span class="proto-badge">${escapeHtml(node.type || 'PROXY')}</span>
+            </div>
+            <div style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+              <span class="group-tag" title="点击筛选此分组" onclick="event.stopPropagation(); selectGroupFilter('${escapeHtml(groupName)}')">
+                <svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> ${dispHtml(groupName)}
+              </span>
+              ${isActive ? '<span style="font-size: 11px; color: var(--primary); font-weight: 700;">● 当前使用中</span>' : ''}
+            </div>
+            <div class="node-meta">
+              <span>${escapeHtml(node.server || '127.0.0.1')}:${node.server_port || 443}</span>
+              <span class="delay-tag ${node.delay > 0 ? (node.delay < 200 ? 'delay-good' : 'delay-med') : (node.delay === -1 ? 'delay-bad' : '')}" id="delay-${escapeHtml(node.tag)}">
+                ${node.delay > 0 ? node.delay + ' ms' : (node.delay === -1 ? '超时' : (isActive ? '活跃' : '未测速'))}
+              </span>
+            </div>
+            <div style="margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); testNodeDelay('${escapeHtml(node.tag)}')">测速</button>
+              <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.tag)}')">删除</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function switchActiveNode(tag) {
+      if (activeNodeTag === tag) return;
+      activeNodeTag = tag;
+      const an = document.getElementById('active-node-name');
+      if (an) an.textContent = dispName(tag);
+      renderNodes();
+      showToast(`正在切换节点至: ${tag}...`, 'info');
+      try {
+        await fetch('/weblog/api.cgi?action=switch_node', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `node=${encodeURIComponent(tag)}`
+        });
+        saveFullProxyConfig(false);
+        showToast(`已切换至: ${tag}`, 'success');
+        setTimeout(checkOutboundIp, 1000);
+      } catch (e) {
+        showToast('切换节点失败', 'error');
+      }
+    }
+
+    async function testNodeDelay(tag) {
+      const el = document.getElementById(`delay-${tag}`);
+      if (el) el.textContent = '测试中...';
+      try {
+        const res = await fetch(`/weblog/api.cgi?action=test_delay&node=${encodeURIComponent(tag)}`);
+        const data = await res.json();
+        if (data.success && data.response && data.response.delay) {
+          const d = data.response.delay;
+          if (el) {
+            el.textContent = d + ' ms';
+            el.className = `delay-tag ${d < 200 ? 'delay-good' : 'delay-med'}`;
+          }
+          const n = nodesList.find(x => x.tag === tag);
+          if (n) n.delay = d;
+        } else {
+          if (el) { el.textContent = '超时'; el.className = 'delay-tag delay-bad'; }
+          const n = nodesList.find(x => x.tag === tag);
+          if (n) n.delay = -1;
+          if (data.error) showToast('测速失败: ' + data.error, 'error');
+        }
+      } catch (e) {
+        if (el) { el.textContent = '失败'; el.className = 'delay-tag delay-bad'; }
+        const n = nodesList.find(x => x.tag === tag);
+        if (n) n.delay = -1;
+      }
+    }
+
+    async function runBatchTest(targetNodes, concurrency = 4) {
+      const queue = [...targetNodes];
+      async function worker() {
+        while (queue.length > 0) {
+          const node = queue.shift();
+          if (node) {
+            await testNodeDelay(node.tag);
+          }
+        }
+      }
+      const workers = Array.from({ length: Math.min(concurrency, targetNodes.length) }, () => worker());
+      await Promise.all(workers);
+    }
+
+    async function testGroupDelays(subIdOrGroupName) {
+      const targetNodes = nodesList.filter(n => n.sub_id === subIdOrGroupName || n.group === subIdOrGroupName);
+      if (!targetNodes.length) { showToast('该分组暂无节点', 'info'); return; }
+      showToast(`开始并发测速分组节点 (共 ${targetNodes.length} 个)...`, 'info');
+      await runBatchTest(targetNodes, 4);
+      showToast('该分组节点测速完成', 'success');
+    }
+
+    async function testCurrentGroupDelays() {
+      let targetNodes = nodesList;
+      if (currentGroupFilter !== 'all') {
+        targetNodes = nodesList.filter(n => n.group === currentGroupFilter || n.sub_id === currentGroupFilter);
+      }
+      if (searchKeyword) {
+        targetNodes = targetNodes.filter(n => {
+          const t = (n.tag || '').toLowerCase();
+          const s = (n.server || '').toLowerCase();
+          return t.includes(searchKeyword) || s.includes(searchKeyword);
+        });
+      }
+      if (!targetNodes.length) { showToast('当前视图无节点可测速', 'info'); return; }
+      showToast(`开始并发测速当前视图节点 (共 ${targetNodes.length} 个)...`, 'info');
+      await runBatchTest(targetNodes, 4);
+      showToast('当前视图测速完成', 'success');
+    }
+
+    async function testAllDelays() {
+      if (!nodesList.length) { showToast('暂无节点可测速', 'info'); return; }
+      showToast(`开始并发测速全部节点 (共 ${nodesList.length} 个)...`, 'info');
+      await runBatchTest(nodesList, 4);
+      showToast('全部节点测速完成', 'success');
+    }
+
+    function clearDeadNodes() {
+      const deadNodes = nodesList.filter(n => n.delay === -1);
+      if (deadNodes.length === 0) {
+        showToast('未检测到超时失效节点 (请先测速)', 'info');
+        return;
+      }
+      if (!confirm(`检测到 ${deadNodes.length} 个超时/不可用节点，确定要全部清理删除吗？`)) {
+        return;
+      }
+      nodesList = nodesList.filter(n => n.delay !== -1);
+      if (deadNodes.some(n => n.tag === activeNodeTag)) {
+        activeNodeTag = nodesList[0] ? nodesList[0].tag : '';
+      }
+      subscriptionsList.forEach(s => {
+        s.node_count = nodesList.filter(n => n.sub_id === s.id || n.group === s.name).length;
+      });
+      renderSubscriptions();
+      renderGroupFilters();
+      renderNodes();
+      saveFullProxyConfig(true);
+      showToast(`已清理 ${deadNodes.length} 个失效节点`, 'success');
+    }
+
+    function deleteNode(tag) {
+      nodesList = nodesList.filter(n => n.tag !== tag);
+      if (activeNodeTag === tag) activeNodeTag = nodesList[0] ? nodesList[0].tag : '';
+      subscriptionsList.forEach(s => {
+        s.node_count = nodesList.filter(n => n.sub_id === s.id || n.group === s.name).length;
+      });
+      renderSubscriptions();
+      renderGroupFilters();
+      renderNodes();
+      saveFullProxyConfig(true);
+      showToast('节点已删除', 'info');
+    }
+
+    function selectRouteMode(mode, updateConfig=true) {
+      currentRouteMode = mode;
+      document.querySelectorAll('#tab-rules .mode-option').forEach(el => el.classList.remove('selected'));
+      const activeEl = document.getElementById(`route-${mode}`);
+      if (activeEl) activeEl.classList.add('selected');
+      if (updateConfig) saveFullProxyConfig(true);
+    }
+
+    function updateAdblockRuleCount() {
+      const el = document.getElementById('rule-blocked-ads');
+      const countTip = document.getElementById('adblock-count-tip');
+      if (el && countTip) {
+        const lines = el.value.split('\n').map(s => s.trim()).filter(s => s && !s.startsWith('#') && !s.startsWith('!'));
+        countTip.textContent = `当前规则数: ${lines.length}`;
+      }
+    }
+
+    function toggleAdblockSwitch(checked) {
+      const badge = document.getElementById('badge-adblock');
+      if (badge) {
+        badge.textContent = checked ? '已启用' : '已停用';
+        badge.className = checked ? 'badge badge-green' : 'badge badge-red';
+      }
+      customRules.adblock_enabled = checked;
+    }
+
+    function presetAdblockRules() {
+      const el = document.getElementById('rule-blocked-ads');
+      if (!el) return;
+      el.value = PRESET_ADBLOCK_DOMAINS.join('\n');
+      updateAdblockRuleCount();
+      showToast('已载入酷安及国产主流开屏广告推荐黑名单', 'info');
+    }
+
+    function clearAdblockRules() {
+      const el = document.getElementById('rule-blocked-ads');
+      if (!el) return;
+      el.value = '';
+      updateAdblockRuleCount();
+      showToast('已清空拦截域名列表', 'info');
+    }
+
+    function importAdblockFromFile() {
+      const fileInput = document.getElementById('adblock-file-input');
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
+    }
+
+    function handleAdblockFileSelect(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const content = e.target.result || '';
+        const lines = content.split('\n');
+        const extractedDomains = [];
+        for (let rawLine of lines) {
+          let line = rawLine.trim();
+          if (!line || line.startsWith('#') || line.startsWith('!') || line.startsWith(';')) continue;
+
+          // Match hosts format: 0.0.0.0 domain.com or 127.0.0.1 domain.com
+          let m = line.match(/^(?:0\.0\.0\.0|127\.0\.0\.1)\s+([a-zA-Z0-9.-]+)/);
+          if (m && m[1]) {
+            extractedDomains.push(m[1].toLowerCase());
+            continue;
+          }
+          // Match dnsmasq format: address=/domain.com/ or server=/domain.com/
+          m = line.match(/^(?:address|server)=\/([a-zA-Z0-9.-]+)\//);
+          if (m && m[1]) {
+            extractedDomains.push(m[1].toLowerCase());
+            continue;
+          }
+          // Match Clash / Quantumult / Surge format: DOMAIN-SUFFIX,example.com,... or DOMAIN,example.com,...
+          m = line.match(/^(?:DOMAIN-SUFFIX|DOMAIN|DOMAIN-KEYWORD),([a-zA-Z0-9.-]+)/i);
+          if (m && m[1]) {
+            extractedDomains.push(m[1].toLowerCase());
+            continue;
+          }
+          // Match plain domain name
+          if (/^[a-zA-Z0-9][-a-zA-Z0-9.]*\.[a-zA-Z]{2,}$/.test(line)) {
+            extractedDomains.push(line.toLowerCase());
+            continue;
+          }
+        }
+
+        if (extractedDomains.length === 0) {
+          showToast('未能从所选文件中解析出有效域名', 'warning');
+          return;
+        }
+
+        const el = document.getElementById('rule-blocked-ads');
+        const currentDomains = el ? el.value.split('\n').map(s => s.trim()).filter(Boolean) : [];
+        const set = new Set([...currentDomains, ...extractedDomains]);
+        if (el) el.value = Array.from(set).join('\n');
+        updateAdblockRuleCount();
+        showToast(`成功导入并合并 ${extractedDomains.length} 条规则 (总计 ${set.size} 条)`, 'success');
+      };
+      reader.readAsText(file);
+    }
+
+    async function runAdblockDiagnostic() {
+      const panel = document.getElementById('adblock-diag-panel');
+      const list = document.getElementById('adblock-diag-list');
+      const summary = document.getElementById('adblock-diag-summary');
+      if (!panel || !list || !summary) return;
+      panel.style.display = 'block';
+      list.innerHTML = '<div style="padding:10px; color:var(--text-dim); text-align:center;">正在查询路由器底层 SmartDNS 状态并进行双向链路探测...</div>';
+      summary.textContent = '正在发起即时探测...';
+      summary.style.color = 'var(--text-dim)';
+
+      let routerData = null;
+      try {
+        const resp = await fetch('/weblog/api.cgi?action=adblock_check');
+        if (resp.ok) {
+          routerData = await resp.json();
+        }
+      } catch (e) {
+        console.warn('Router adblock_check api failed:', e);
+      }
+
+      list.innerHTML = '';
+
+      if (routerData && routerData.success) {
+        const header = document.createElement('div');
+        header.style.background = 'color-mix(in srgb, var(--primary) 10%, transparent)';
+        header.style.padding = '8px 12px';
+        header.style.borderRadius = '6px';
+        header.style.marginBottom = '8px';
+        header.style.fontSize = '12px';
+        header.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
+            <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg> <strong>SmartDNS 核心引擎</strong>: <span style="color:${routerData.smartdns_active ? 'var(--success)' : 'var(--danger)'}; font-weight:700;">${routerData.smartdns_active ? '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.8 10A10 10 0 1 1 17 3.34"/><path d="m9 11 3 3L22 4"/></svg> 运行中 (端口 :6053)' : '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> 未运行'}</span>${!routerData.smartdns_active ? ' <button onclick="restartSmartDNSFromUI()" style="margin-left:6px; padding:2px 8px; font-size:11px; background:var(--warning); color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5 14 8l6 .5-4.5 4 1.4 6-5.9-3.2L5.1 18.5 6.5 12.5 2 8.5l6-.5z"/></svg> 一键拉起</button>' : ''}</span>
+            <span><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> <strong>底层黑名单库</strong>: <span style="color:var(--primary); font-weight:700;">${(routerData.rules_count || 0).toLocaleString()} 条</span></span>
+          </div>
+          <div style="font-size:11px; color:var(--text-muted);">
+            测速模式: Ping + TCP(80/443) 双栈测速加速 | 防投毒秒拒: 0.0.0.0 / NXDOMAIN
+          </div>
+        `;
+        list.appendChild(header);
+      }
+
+    async function restartSmartDNSFromUI() {
+      const summary = document.getElementById('adblock-diag-summary');
+      if (summary) {
+        summary.textContent = '正在重新载入 9.8 万条规则并拉起 SmartDNS...';
+        summary.style.color = 'var(--warning)';
+      }
+      try {
+        const resp = await fetch('/weblog/api.cgi?action=smartdns_restart');
+        const data = await resp.json();
+        if (data.success) {
+          setTimeout(runAdblockDiagnostic, 1000);
+        } else {
+          alert('拉起失败: ' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('请求失败: ' + e);
+      }
+    }
+
+      const targets = [
+        { name: '字节跳动穿山甲广告', domain: 'pangle.cn', isAd: true },
+        { name: '腾讯优量汇广告联盟', domain: 'gdt.qq.com', isAd: true },
+        { name: '百度百青藤广告联盟', domain: 'mobads.baidu.com', isAd: true },
+        { name: '快手广告联盟', domain: 'e.kuaishou.com', isAd: true },
+        { name: '酷安开屏追踪打点', domain: 'tracking.coolapk.com', isAd: true },
+        { name: 'B站商业打点接口', domain: 'cm.bilibili.com', isAd: true },
+        { name: '正常国内网站 (百度)', domain: 'www.baidu.com', isAd: false },
+        { name: '正常国内网站 (B站主站)', domain: 'www.bilibili.com', isAd: false }
+      ];
+
+      let blockedCount = 0;
+      let totalAds = targets.filter(t => t.isAd).length;
+      let clientBypassDetected = false;
+
+      for (const t of targets) {
+        const item = document.createElement('div');
+        item.style.display = 'flex';
+        item.style.justifyContent = 'space-between';
+        item.style.alignItems = 'center';
+        item.style.padding = '6px 10px';
+        item.style.background = 'var(--fill)';
+        item.style.borderRadius = '5px';
+        item.style.fontSize = '12px';
+
+        const rTest = routerData?.tests?.find(x => x.domain === t.domain);
+        const routerBlocked = rTest ? rTest.blocked : false;
+        const routerIp = rTest ? rTest.ip : '';
+
+        const t0 = performance.now();
+        let clientBlocked = false;
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
+          await fetch(`https://${t.domain}/favicon.ico?_t=${Date.now()}`, {
+            mode: 'no-cors',
+            cache: 'no-store',
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          clientBlocked = false;
+        } catch (e) {
+          clientBlocked = true;
+        }
+        const cost = Math.round(performance.now() - t0);
+
+        if (t.isAd) {
+          if (routerBlocked || clientBlocked) {
+            blockedCount++;
+            let badge = '';
+            if (routerBlocked && clientBlocked) {
+              badge = `<span style="color:var(--success); font-weight:700;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> 拦截成功 (DNS秒拒 ${cost}ms)</span>`;
+            } else if (routerBlocked) {
+              badge = `<span style="color:var(--success); font-weight:700;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> 路由器已秒拒 (${routerIp})</span>`;
+              clientBypassDetected = true;
+            } else {
+              badge = `<span style="color:var(--success); font-weight:700;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> 拦截成功 (${cost}ms)</span>`;
+            }
+            item.innerHTML = `<span><strong>${t.name}</strong> <span style="color:var(--text-muted); font-size:11px;">(${t.domain})</span></span>${badge}`;
+          } else {
+            item.innerHTML = `<span><strong>${t.name}</strong> <span style="color:var(--text-muted); font-size:11px;">(${t.domain})</span></span><span style="color:var(--warning); font-weight:700;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> 未被拦截 (${cost}ms)</span>`;
+          }
+        } else {
+          if (!clientBlocked || (rTest && !rTest.blocked)) {
+            item.innerHTML = `<span><strong>${t.name}</strong> <span style="color:var(--text-muted); font-size:11px;">(${t.domain})</span></span><span style="color:var(--primary); font-weight:700;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg> 正常通行 (CDN优选 ${cost}ms)</span>`;
+          } else {
+            item.innerHTML = `<span><strong>${t.name}</strong> <span style="color:var(--text-muted); font-size:11px;">(${t.domain})</span></span><span style="color:var(--danger); font-weight:700;"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> 访问受阻 (${cost}ms)</span>`;
+          }
+        }
+        list.appendChild(item);
+      }
+
+      summary.textContent = `广告拦截率: ${blockedCount}/${totalAds} (${Math.round(blockedCount/totalAds*100)}%)`;
+      summary.style.color = (blockedCount === totalAds) ? 'var(--success)' : 'var(--warning)';
+      summary.style.fontWeight = '700';
+
+      if (clientBypassDetected) {
+        const tipBox = document.createElement('div');
+        tipBox.style.marginTop = '10px';
+        tipBox.style.padding = '8px 12px';
+        tipBox.style.background = 'var(--fill)';
+        tipBox.style.border = '1px solid var(--card-border)';
+        tipBox.style.borderRadius = '6px';
+        tipBox.style.fontSize = '11px';
+        tipBox.style.color = 'var(--warning)';
+        tipBox.style.lineHeight = '1.6';
+        tipBox.innerHTML = `
+          <strong><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg> 手机端生效提示</strong>：路由器底层已 100% 成功秒拒广告请求！若手机端仍有个别项目显示未拦截，通常原因如下：<br>
+          • <strong>DNS 本地缓存</strong>：手机刚连接 Wi-Fi，系统缓存了先前的 DNS 解析记录。开关一次手机【飞行模式】即可强制刷新。<br>
+          • <strong>系统私人 DNS</strong>：若手机开启了【私人 DNS / DoT】，会绕过路由器 DNS。在手机「设置」-「连接与共享」-「私人 DNS」中将其设为「关闭」即可享受全量拦截与加速！
+        `;
+        list.appendChild(tipBox);
+      }
+    }
+
+    function populateRulesInputs() {
+      document.getElementById('rule-direct-domains').value = (customRules.direct_domains || []).join('\n');
+      document.getElementById('rule-proxy-domains').value = (customRules.proxy_domains || []).join('\n');
+      document.getElementById('rule-direct-ips').value = (customRules.direct_ips || []).join('\n');
+
+      const isAdEnabled = customRules.adblock_enabled !== false;
+      const adSwitch = document.getElementById('adblock-switch');
+      if (adSwitch) adSwitch.checked = isAdEnabled;
+      toggleAdblockSwitch(isAdEnabled);
+
+      const elAds = document.getElementById('rule-blocked-ads');
+      if (elAds) {
+        const adsList = (customRules.blocked_ads_domains && customRules.blocked_ads_domains.length > 0)
+          ? customRules.blocked_ads_domains
+          : PRESET_ADBLOCK_DOMAINS;
+        elAds.value = adsList.join('\n');
+        updateAdblockRuleCount();
+        elAds.oninput = updateAdblockRuleCount;
+      }
+    }
+
+    function saveRoutingRules() {
+      customRules.direct_domains = document.getElementById('rule-direct-domains').value.split('\n').map(s => s.trim()).filter(Boolean);
+      customRules.proxy_domains = document.getElementById('rule-proxy-domains').value.split('\n').map(s => s.trim()).filter(Boolean);
+      customRules.direct_ips = document.getElementById('rule-direct-ips').value.split('\n').map(s => s.trim()).filter(Boolean);
+
+      const adSwitch = document.getElementById('adblock-switch');
+      customRules.adblock_enabled = adSwitch ? adSwitch.checked : true;
+      const elAds = document.getElementById('rule-blocked-ads');
+      customRules.blocked_ads_domains = elAds ? elAds.value.split('\n').map(s => s.trim()).filter(s => s && !s.startsWith('#') && !s.startsWith('!')) : [];
+
+      saveFullProxyConfig(true);
+      showToast('分流规则与广告拦截配置已保存并应用！', 'success');
+    }
+
+    function resetRoutingRules() {
+      customRules = {
+        direct_domains: ["baidu.com", "bilibili.com", "qq.com", "163.com", "taobao.com", "jd.com", "weibo.com", "zhihu.com"],
+        proxy_domains: ["google.com", "youtube.com", "github.com", "telegram.org", "twitter.com", "x.com", "openai.com", "instagram.com"],
+        direct_ips: ["223.5.5.5", "119.29.29.29", "114.114.114.114"],
+        proxy_ips: [],
+        adblock_enabled: true,
+        blocked_ads_domains: PRESET_ADBLOCK_DOMAINS.slice()
+      };
+      populateRulesInputs();
+      saveFullProxyConfig(true);
+      showToast('已恢复默认推荐分流与广告拦截规则', 'info');
+    }
+
+    async function saveFullProxyConfig(showNotice=true) {
+      const outbounds = [];
+
+      // Ensure unique node tags for sing-box
+      const seenTags = new Set();
+      nodesList.forEach(n => {
+        let tag = n.tag || 'Proxy';
+        if (seenTags.has(tag)) {
+          let counter = 2;
+          while (seenTags.has(`${tag}_${counter}`)) {
+            counter++;
+          }
+          tag = `${tag}_${counter}`;
+          n.tag = tag;
+        }
+        seenTags.add(tag);
+      });
+
+      const nodeTags = nodesList.map(n => n.tag);
+      if (activeNodeTag && !nodeTags.includes(activeNodeTag)) {
+        activeNodeTag = nodeTags[0] || '';
+      }
+      if (!activeNodeTag && nodeTags.length > 0) {
+        activeNodeTag = nodeTags[0];
+      }
+      const an = document.getElementById('active-node-name');
+      if (an) an.textContent = dispName(activeNodeTag) || '未选定节点';
+
+      // Selector outbound for Clash API & switching
+      outbounds.push({
+        type: "selector",
+        tag: "GLOBAL",
+        outbounds: nodeTags.length > 0 ? [...nodeTags, "direct"] : ["direct"],
+        default: activeNodeTag || (nodeTags[0] || "direct")
+      });
+
+      // Append all configured proxy node outbounds
+      nodesList.forEach(n => {
+        outbounds.push(n.raw_outbound || buildOutboundFromNode(n));
+      });
+
+      // System outbounds
+      outbounds.push({ type: "direct", tag: "direct" });
+      outbounds.push({ type: "block", tag: "block" });
+      outbounds.push({ type: "dns", tag: "dns-out" });
+
+      // AdBlock rules setup
+      const isAdblockOn = customRules.adblock_enabled !== false;
+      const blockedDomains = (customRules.blocked_ads_domains && customRules.blocked_ads_domains.length > 0)
+        ? customRules.blocked_ads_domains
+        : (isAdblockOn ? PRESET_ADBLOCK_DOMAINS : []);
+
+      // Build routing rules
+      const rules = [
+        { protocol: "dns", outbound: "dns-out" },
+        { ip_is_private: true, outbound: "direct" }
+      ];
+
+      // AdBlock IP & Domain routing rules (Top Priority: reject ad connections immediately)
+      if (isAdblockOn && blockedDomains.length > 0) {
+        rules.push({ domain_suffix: blockedDomains, outbound: "block" });
+        rules.push({
+          ip_cidr: [
+            "203.107.1.1/32", "203.107.1.33/32", "203.107.1.34/32",
+            "119.29.29.98/32", "119.29.29.99/32",
+            "182.254.116.116/32", "182.254.118.118/32"
+          ],
+          outbound: "block"
+        });
+      }
+
+      // Custom proxy domains & IPs (highest priority)
+      if (customRules.proxy_domains && customRules.proxy_domains.length) {
+        rules.push({ domain_suffix: customRules.proxy_domains, outbound: "GLOBAL" });
+      }
+      if (customRules.proxy_ips && customRules.proxy_ips.length) {
+        rules.push({ ip_cidr: customRules.proxy_ips, outbound: "GLOBAL" });
+      }
+
+      // Custom direct domains & IPs
+      if (customRules.direct_domains && customRules.direct_domains.length) {
+        rules.push({ domain_suffix: customRules.direct_domains, outbound: "direct" });
+      }
+      if (customRules.direct_ips && customRules.direct_ips.length) {
+        rules.push({ ip_cidr: customRules.direct_ips, outbound: "direct" });
+      }
+
+      // Rule sets for bypass_cn mode (instant domestic speed, 100% accurate)
+      if (currentRouteMode === 'bypass_cn') {
+        rules.push({ rule_set: "geosite-cn", outbound: "direct" });
+        rules.push({ rule_set: "geoip-cn", outbound: "direct" });
+      }
+
+      // Extract node server domains so they are resolved via direct DNS without recursion deadlock
+      const nodeServerDomains = [];
+      nodesList.forEach(n => {
+        const s = n.server || (n.raw_outbound && n.raw_outbound.server);
+        if (s && !/^\d+\.\d+\.\d+\.\d+$/.test(s)) {
+          if (!nodeServerDomains.includes(s)) nodeServerDomains.push(s);
+        }
+      });
+
+      // DNS routing rules (Clean & Secure: No DNS leak, No loop)
+      const dnsRules = [];
+      // 1. Block IPv6 AAAA queries to completely prevent IPv6 DNS leak & timeout
+      dnsRules.push({ query_type: ["AAAA"], server: "dns_block" });
+
+      // 2. AdBlock DNS Rules (Immediate rcode://refused, 0ms response, bypasses splash countdowns)
+      if (isAdblockOn && blockedDomains.length > 0) {
+        dnsRules.push({ domain_suffix: blockedDomains, server: "dns_block" });
+      }
+
+      // 3. Node server hostnames and outbound internal DNS queries must be directly resolved by domestic DNS
+      dnsRules.push({ outbound: "any", server: "dns_direct" });
+      if (nodeServerDomains.length > 0) {
+        dnsRules.push({ domain: nodeServerDomains, server: "dns_direct" });
+      }
+
+      // 4. Custom proxy domains (highest priority)
+      if (customRules.proxy_domains && customRules.proxy_domains.length) {
+        dnsRules.push({ domain_suffix: customRules.proxy_domains, server: "dns_proxy" });
+      }
+
+      // 5. Custom direct domains
+      if (customRules.direct_domains && customRules.direct_domains.length) {
+        dnsRules.push({ domain_suffix: customRules.direct_domains, server: "dns_direct" });
+      }
+
+      // 6. Domestic domains via geosite-cn & common suffixes
+      dnsRules.push({ rule_set: "geosite-cn", server: "dns_direct" });
+      dnsRules.push({
+        domain_suffix: [
+          ".cn", ".baidu.com", ".qq.com", ".163.com", ".taobao.com",
+          ".jd.com", ".bilibili.com", ".alipay.com", ".zhihu.com", ".weibo.com",
+          ".coolapk.com", ".coolapkmarket.net", ".coolapkmarket.com", ".douyin.com"
+        ],
+        server: "dns_direct"
+      });
+
+      // Pure self-contained sing-box runtime configuration
+      const singBoxJson = {
+        log: { level: "warn" },
+        experimental: { clash_api: { external_controller: "0.0.0.0:9090" } },
+        dns: {
+          servers: [
+            { tag: "dns_direct", address: "udp://127.0.0.1:6053", detour: "direct" },
+            { tag: "dns_proxy", address: "https://1.1.1.1/dns-query", detour: nodeTags.length > 0 ? "GLOBAL" : "direct" },
+            { tag: "dns_proxy_fallback", address: "tcp://8.8.8.8", detour: nodeTags.length > 0 ? "GLOBAL" : "direct" },
+            { tag: "dns_block", address: "rcode://success" }
+          ],
+          rules: dnsRules,
+          final: currentRouteMode === 'direct' ? 'dns_direct' : 'dns_proxy',
+          strategy: "ipv4_only",
+          independent_cache: true
+        },
+        inbounds: [
+          {
+            type: "tun",
+            tag: "tun-in",
+            interface_name: "tun0",
+            inet4_address: "172.19.0.1/30",
+            mtu: 1400,
+            auto_route: false,
+            strict_route: false,
+            stack: "gvisor",
+            sniff: true
+          },
+          {
+            type: "mixed",
+            tag: "mixed-in",
+            listen: "0.0.0.0",
+            listen_port: 2080
+          }
+        ],
+        outbounds: outbounds,
+        route: {
+          rule_set: [
+            {
+              tag: "geoip-cn",
+              type: "local",
+              format: "binary",
+              path: "/mnt/jffs2/proxy/geoip-cn.srs"
+            },
+            {
+              tag: "geosite-cn",
+              type: "local",
+              format: "binary",
+              path: "/mnt/jffs2/proxy/geosite-cn.srs"
+            }
+          ],
+          rules: rules,
+          final: currentRouteMode === 'direct' ? 'direct' : 'GLOBAL'
+        }
+      };
+
+      const fullConfig = {
+        enabled: proxyRunning,
+        active_node: activeNodeTag,
+        route_mode: currentRouteMode,
+        subscriptions: subscriptionsList,
+        nodes: nodesList,
+        custom_rules: customRules
+      };
+
+      try {
+        // 1. Save UI State
+        await fetch('/weblog/api.cgi?action=save_proxy_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullConfig, null, 2)
+        });
+
+        // 2. Validate and Save Sing-box Runtime Config
+        const res = await fetch('/weblog/api.cgi?action=save_runtime_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(singBoxJson, null, 2)
+        });
+        const ret = await res.json();
+        if (ret.success) {
+          if (showNotice) showToast('配置已验证并安全持久化至 Flash', 'success');
+        } else {
+          showToast('内核配置校验失败: ' + ret.error, 'error');
+        }
+      } catch (e) {
+        console.error('Failed to save proxy config', e);
+      }
+    }
+
+    function buildOutboundFromNode(n) {
+      if (n.raw_outbound) return n.raw_outbound;
+      return {
+        type: n.type || "shadowsocks",
+        tag: n.tag,
+        server: n.server,
+        server_port: n.server_port
+      };
+    }
+
+    function parseNodeUrl(urlStr) {
+      try {
+        urlStr = urlStr.trim();
+        if (!urlStr) return null;
+
+        // VLESS
+        if (urlStr.startsWith('vless://')) {
+          const u = new URL(urlStr);
+          const uuid = u.username;
+          const host = u.hostname;
+          const port = parseInt(u.port) || 443;
+          const name = decodeURIComponent(u.hash.replace('#', '')) || `VLESS-${host}:${port}`;
+          const p = u.searchParams;
+
+          const outbound = {
+            type: "vless",
+            tag: name,
+            server: host,
+            server_port: port,
+            uuid: uuid,
+            packet_encoding: "xudp"
+          };
+
+          const sec = p.get('security');
+          if (sec === 'reality') {
+            outbound.tls = {
+              enabled: true,
+              server_name: p.get('sni') || host,
+              reality: {
+                enabled: true,
+                public_key: p.get('pbk') || '',
+                short_id: p.get('sid') || ''
+              },
+              utls: { enabled: true, fingerprint: p.get('fp') || 'chrome' }
+            };
+          } else if (sec === 'tls') {
+            outbound.tls = {
+              enabled: true,
+              server_name: p.get('sni') || host,
+              utls: { enabled: true, fingerprint: p.get('fp') || 'chrome' }
+            };
+          }
+
+          const flow = p.get('flow');
+          if (flow) outbound.flow = flow;
+
+          const transportType = p.get('type') || 'tcp';
+          if (transportType === 'grpc') {
+            outbound.transport = { type: "grpc", service_name: p.get('serviceName') || '' };
+          } else if (transportType === 'ws') {
+            outbound.transport = { type: "ws", path: p.get('path') || '/', headers: { Host: p.get('host') || host } };
+          } else if (transportType === 'httpupgrade') {
+            outbound.transport = { type: "httpupgrade", path: p.get('path') || '/', host: p.get('host') || host };
+          }
+
+          return { tag: name, type: "vless", server: host, server_port: port, raw_outbound: outbound };
+        }
+
+        // Hysteria 2
+        if (urlStr.startsWith('hysteria2://') || urlStr.startsWith('hy2://')) {
+          const u = new URL(urlStr.replace('hy2://', 'hysteria2://'));
+          const auth = u.username || u.password;
+          const host = u.hostname;
+          const port = parseInt(u.port) || 443;
+          const name = decodeURIComponent(u.hash.replace('#', '')) || `Hys2-${host}:${port}`;
+          const p = u.searchParams;
+
+          const outbound = {
+            type: "hysteria2",
+            tag: name,
+            server: host,
+            server_port: port,
+            password: auth,
+            tls: {
+              enabled: true,
+              server_name: p.get('sni') || host,
+              insecure: p.get('insecure') === '1'
+            }
+          };
+          if (p.get('obfs')) {
+            outbound.obfs = { type: "salamander", password: p.get('obfs-password') || '' };
+          }
+          return { tag: name, type: "hysteria2", server: host, server_port: port, raw_outbound: outbound };
+        }
+
+        // TUIC (v5)
+        if (urlStr.startsWith('tuic://')) {
+          const u = new URL(urlStr);
+          const [uuid, pass] = (u.username + ':' + u.password).split(':');
+          const host = u.hostname;
+          const port = parseInt(u.port) || 443;
+          const name = decodeURIComponent(u.hash.replace('#', '')) || `TUIC-${host}:${port}`;
+          const p = u.searchParams;
+
+          const outbound = {
+            type: "tuic",
+            tag: name,
+            server: host,
+            server_port: port,
+            uuid: uuid,
+            password: pass,
+            congestion_control: p.get('congestion_control') || p.get('congestion_controller') || 'bbr',
+            tls: { enabled: true, server_name: p.get('sni') || host }
+          };
+          return { tag: name, type: "tuic", server: host, server_port: port, raw_outbound: outbound };
+        }
+
+        // Trojan
+        if (urlStr.startsWith('trojan://')) {
+          const u = new URL(urlStr);
+          const pass = u.username;
+          const host = u.hostname;
+          const port = parseInt(u.port) || 443;
+          const name = decodeURIComponent(u.hash.replace('#', '')) || `Trojan-${host}:${port}`;
+          const p = u.searchParams;
+
+          const outbound = {
+            type: "trojan",
+            tag: name,
+            server: host,
+            server_port: port,
+            password: pass,
+            tls: { enabled: true, server_name: p.get('sni') || host }
+          };
+          const transportType = p.get('type') || 'tcp';
+          if (transportType === 'ws') {
+            outbound.transport = { type: "ws", path: p.get('path') || '/', headers: { Host: p.get('host') || host } };
+          } else if (transportType === 'grpc') {
+            outbound.transport = { type: "grpc", service_name: p.get('serviceName') || '' };
+          }
+          return { tag: name, type: "trojan", server: host, server_port: port, raw_outbound: outbound };
+        }
+
+        // VMess
+        if (urlStr.startsWith('vmess://')) {
+          const b64 = urlStr.substring(8);
+          const jsonStr = atob(b64);
+          const v = JSON.parse(jsonStr);
+          const outbound = {
+            type: "vmess",
+            tag: v.ps || `${v.add}:${v.port}`,
+            server: v.add,
+            server_port: parseInt(v.port),
+            uuid: v.id,
+            alter_id: parseInt(v.aid) || 0,
+            security: "auto"
+          };
+          if (v.net === 'ws') {
+            outbound.transport = { type: "ws", path: v.path || "/", headers: { Host: v.host || v.add } };
+          } else if (v.net === 'grpc') {
+            outbound.transport = { type: "grpc", service_name: v.path || "" };
+          }
+          if (v.tls === 'tls') {
+            outbound.tls = { enabled: true, server_name: v.sni || v.host || v.add };
+          }
+          return { tag: outbound.tag, type: "vmess", server: v.add, server_port: parseInt(v.port), raw_outbound: outbound };
+        }
+
+        // Shadowsocks
+        if (urlStr.startsWith('ss://')) {
+          const hashIdx = urlStr.indexOf('#');
+          let name = 'SS-Node';
+          let body = urlStr.substring(5);
+          if (hashIdx !== -1) {
+            name = decodeURIComponent(urlStr.substring(hashIdx + 1));
+            body = urlStr.substring(5, hashIdx);
+          }
+          if (body.includes('@')) {
+            const [userinfo, hostport] = body.split('@');
+            let [method, password] = userinfo.split(':');
+            if (!password) {
+              const decoded = atob(userinfo);
+              [method, password] = decoded.split(':');
+            }
+            const [host, port] = hostport.split(':');
+            const outbound = {
+              type: "shadowsocks",
+              tag: name,
+              server: host,
+              server_port: parseInt(port),
+              method: method,
+              password: password
+            };
+            return { tag: name, type: "shadowsocks", server: host, server_port: parseInt(port), raw_outbound: outbound };
+          }
+        }
+      } catch (e) {
+        console.warn('Parse node error', e);
+      }
+      return null;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // display-only: strip flag emoji (regional indicators) for a cleaner list.
+    // NEVER use this for identifiers passed to onclick/API (would break Clash API names).
+    function dispName(str) {
+      if (!str) return '';
+      return String(str).replace(/[\u{1F1E6}-\u{1F1FF}]{2}/gu, '').replace(/\uFE0F/g, '').replace(/\s{2,}/g, ' ').trim();
+    }
+    // display helper: clean flags + html-escape, for text shown inside HTML
+    function dispHtml(str) {
+      return escapeHtml(dispName(str));
+    }
+
+    // Friendly CPU load display: "2.56 2.33 2.18" -> 轻松 / 适中 / 偏高
+    const CPU_CORES = 4;
+    function renderLoad(raw) {
+      const nums = String(raw).trim().split(/\s+/).map(function (x) { return parseFloat(x); }).filter(function (x) { return !isNaN(x); });
+      if (!nums.length) return;
+      const l1 = nums[0], l5 = nums[1] != null ? nums[1] : l1, l15 = nums[2] != null ? nums[2] : l1;
+      const ratio = l1 / CPU_CORES; // 0..1+ relative to core count
+      let label, cls;
+      if (ratio < 0.5) { label = '轻松'; cls = 'load-ok'; }
+      else if (ratio < 0.85) { label = '适中'; cls = 'load-mid'; }
+      else { label = '偏高'; cls = 'load-high'; }
+      const badge = document.getElementById('hw-load-badge');
+      if (badge) { badge.textContent = label; badge.className = 'load-badge ' + cls; }
+      const pct = document.getElementById('hw-load-pct');
+      if (pct) pct.textContent = 'CPU 占用约 ' + Math.round(ratio * 100) + '%（' + CPU_CORES + ' 核）';
+      const det = document.getElementById('hw-load-detail');
+      if (det) det.textContent = '1分钟 ' + l1.toFixed(2) + ' · 5分钟 ' + l5.toFixed(2) + ' · 15分钟 ' + l15.toFixed(2);
+    }
+
+    function openAddSubModal() {
+      document.getElementById('sub-modal-id').value = '';
+      document.getElementById('sub-modal-title').innerHTML = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> 添加新订阅';
+      document.getElementById('sub-name-input').value = '订阅 ' + (subscriptionsList.length + 1);
+      document.getElementById('sub-url-input').value = '';
+      document.getElementById('sub-filter-info-cb').checked = true;
+      document.getElementById('btn-save-sub-modal').innerHTML = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> 保存并立即拉取节点';
+      document.getElementById('sub-modal').style.display = 'flex';
+      setTimeout(() => {
+        const inp = document.getElementById('sub-url-input');
+        if (inp) inp.focus();
+      }, 100);
+    }
+
+    function openEditSubModal(id) {
+      const sub = subscriptionsList.find(s => s.id === id);
+      if (!sub) return;
+      document.getElementById('sub-modal-id').value = sub.id;
+      document.getElementById('sub-modal-title').innerHTML = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg> 编辑订阅与分组';
+      document.getElementById('sub-name-input').value = sub.name;
+      document.getElementById('sub-url-input').value = sub.url;
+      document.getElementById('sub-filter-info-cb').checked = sub.filter_info !== false;
+      document.getElementById('btn-save-sub-modal').innerHTML = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg> 保存修改并刷新';
+      document.getElementById('sub-modal').style.display = 'flex';
+    }
+
+    function closeSubModal(e) {
+      document.getElementById('sub-modal').style.display = 'none';
+    }
+
+    async function saveSubscriptionModal() {
+      const idInput = document.getElementById('sub-modal-id').value.trim();
+      const name = document.getElementById('sub-name-input').value.trim();
+      const url = document.getElementById('sub-url-input').value.trim();
+      const filterInfo = document.getElementById('sub-filter-info-cb').checked;
+
+      if (!name) { showToast('请输入订阅分组备注名称', 'error'); return; }
+      if (!url) { showToast('请输入订阅 URL 地址', 'error'); return; }
+
+      if (idInput) {
+        // Edit existing subscription
+        const sub = subscriptionsList.find(s => s.id === idInput);
+        if (sub) {
+          const oldName = sub.name;
+          sub.name = name;
+          sub.url = url;
+          sub.filter_info = filterInfo;
+          // Update group name in existing nodes
+          nodesList.forEach(n => {
+            if (n.sub_id === sub.id || n.group === oldName) {
+              n.group = name;
+            }
+          });
+          closeSubModal();
+          renderSubscriptions();
+          renderGroupFilters();
+          renderNodes();
+          showToast(`已保存订阅「${name}」修改，正在拉取最新节点...`, 'info');
+          await updateSubscription(sub.id);
+        }
+      } else {
+        // Add new subscription
+        const newId = 'sub_' + Date.now();
+        const newSub = {
+          id: newId,
+          name: name,
+          url: url,
+          node_count: 0,
+          updated_at: '',
+          filter_info: filterInfo
+        };
+        subscriptionsList.push(newSub);
+        closeSubModal();
+        renderSubscriptions();
+        renderGroupFilters();
+        showToast(`已添加订阅「${name}」，正在拉取节点...`, 'info');
+        await updateSubscription(newId);
+      }
+    }
+
+    function openManualImportModal() {
+      document.getElementById('manual-modal').style.display = 'flex';
+      renderGroupFilters();
+    }
+    function closeManualImportModal(e) {
+      document.getElementById('manual-modal').style.display = 'none';
+    }
+    function switchManualTab(tab) {
+      document.getElementById('manual-link-wrap').style.display = tab === 'link' ? 'block' : 'none';
+      document.getElementById('manual-qr-wrap').style.display = tab === 'qr' ? 'block' : 'none';
+      document.getElementById('btn-manual-tab-link').className = `btn btn-sm ${tab === 'link' ? 'btn-primary' : 'btn-secondary'}`;
+      document.getElementById('btn-manual-tab-qr').className = `btn btn-sm ${tab === 'qr' ? 'btn-primary' : 'btn-secondary'}`;
+    }
+
+    async function decodeQrImage(blobOrFile) {
+      if (!blobOrFile) return;
+      showToast('正在解析二维码...', 'info');
+      const targetGroup = (document.getElementById('manual-group-select') && document.getElementById('manual-group-select').value) || '自建/手动导入';
+      const targetSub = subscriptionsList.find(s => s.name === targetGroup);
+      const targetSubId = targetSub ? targetSub.id : 'manual';
+
+      try {
+        if ('BarcodeDetector' in window) {
+          const imgBmp = await createImageBitmap(blobOrFile);
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          const barcodes = await detector.detect(imgBmp);
+          if (barcodes.length > 0) {
+            const rawUrl = barcodes[0].rawValue.trim();
+            const parsed = parseNodeUrl(rawUrl);
+            if (parsed) {
+              parsed.group = targetGroup;
+              parsed.sub_id = targetSubId;
+              nodesList = nodesList.filter(n => n.tag !== parsed.tag);
+              nodesList.push(parsed);
+              if (!activeNodeTag) activeNodeTag = parsed.tag;
+              if (targetSub) targetSub.node_count = nodesList.filter(n => n.sub_id === targetSub.id).length;
+              renderSubscriptions();
+              renderGroupFilters();
+              renderNodes();
+              saveFullProxyConfig(true);
+              closeManualImportModal();
+              showToast(`成功识别二维码并导入节点: ${parsed.tag} 到「${targetGroup}」！`, 'success');
+              return;
+            } else {
+              document.getElementById('raw-links-input').value = rawUrl;
+              switchManualTab('link');
+              showToast('已从二维码提取内容，请点击导入', 'info');
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('QR decode error', e);
+      }
+      showToast('未能从图片中直接识别出二维码，请使用单链接直接粘贴', 'error');
+    }
+
+    function handleQrFile(e) {
+      const f = e.target.files && e.target.files[0];
+      if (f) decodeQrImage(f);
+    }
+
+    function parseInlineYamlObj(s) {
+      s = s.trim();
+      if (s.startsWith('{') && s.endsWith('}')) {
+        s = s.slice(1, -1).trim();
+      }
+      const res = {};
+      let i = 0;
+      const n = s.length;
+      while (i < n) {
+        while (i < n && (s[i] === ' ' || s[i] === ',' || s[i] === '\t' || s[i] === '\r' || s[i] === '\n')) i++;
+        if (i >= n) break;
+
+        const kStart = i;
+        while (i < n && s[i] !== ':') i++;
+        const key = s.slice(kStart, i).trim().replace(/^["']|["']$/g, '');
+        i++; // skip ':'
+
+        while (i < n && (s[i] === ' ' || s[i] === '\t')) i++;
+        if (i >= n) break;
+
+        if (s[i] === '{') {
+          let braceDepth = 0;
+          const valStart = i;
+          while (i < n) {
+            if (s[i] === '{') braceDepth++;
+            else if (s[i] === '}') {
+              braceDepth--;
+              if (braceDepth === 0) { i++; break; }
+            }
+            i++;
+          }
+          res[key] = parseInlineYamlObj(s.slice(valStart, i));
+        } else {
+          const valStart = i;
+          let inQuote = null;
+          while (i < n) {
+            if (s[i] === '"' || s[i] === "'") {
+              if (inQuote === s[i]) inQuote = null;
+              else if (inQuote === null) inQuote = s[i];
+            } else if (inQuote === null && s[i] === ',') {
+              break;
+            }
+            i++;
+          }
+          let valStr = s.slice(valStart, i).trim().replace(/^["']|["']$/g, '');
+          if (valStr.toLowerCase() === 'true') valStr = true;
+          else if (valStr.toLowerCase() === 'false') valStr = false;
+          else if (/^\d+$/.test(valStr)) valStr = parseInt(valStr, 10);
+          res[key] = valStr;
+        }
+        if (i < n && s[i] === ',') i++;
+      }
+      return res;
+    }
+
+    function parseClashYamlProxies(yamlText) {
+      const results = [];
+      try {
+        const lines = yamlText.split(/\r?\n/);
+        let inProxies = false;
+        let currentProxy = null;
+        let currentSubKey = null;
+
+        for (let line of lines) {
+          if (line.match(/^proxies\s*:/)) {
+            inProxies = true;
+            continue;
+          }
+          if (inProxies && line.match(/^[a-zA-Z_-]+\s*:/)) {
+            break;
+          }
+          if (!inProxies) continue;
+
+          // 1. Inline YAML mapping: - {name: ..., server: ...}
+          if (line.match(/^\s*-\s*\{/)) {
+            const objStr = line.replace(/^\s*-\s*/, '');
+            let obj = null;
+            try {
+              obj = JSON.parse(objStr);
+            } catch (e) {
+              obj = parseInlineYamlObj(objStr);
+            }
+            if (obj && (obj.name || obj.server) && (obj.server || obj.port)) {
+              const n = convertClashProxyToNode(obj);
+              if (n) results.push(n);
+            }
+            continue;
+          }
+
+          // 2. Block item start: - name: "..."
+          if (line.match(/^\s*-\s+name:\s*/)) {
+            if (currentProxy) {
+              const n = convertClashProxyToNode(currentProxy);
+              if (n) results.push(n);
+            }
+            currentProxy = {};
+            currentSubKey = null;
+            currentProxy.name = line.replace(/^\s*-\s+name:\s*["']?/, '').replace(/["']?\s*$/, '');
+            continue;
+          }
+
+          // 3. Nested object header: ws-opts: / grpc-opts: / reality-opts:
+          if (currentProxy && line.match(/^\s+([a-zA-Z_-]+):\s*$/)) {
+            const m = line.match(/^\s+([a-zA-Z_-]+):\s*$/);
+            currentSubKey = m[1].trim();
+            currentProxy[currentSubKey] = currentProxy[currentSubKey] || {};
+            continue;
+          }
+
+          // 4. Sub-properties inside nested object (indent >= 6 spaces)
+          if (currentProxy && currentSubKey && line.match(/^\s{6,}([a-zA-Z_-]+):\s*(.*)$/)) {
+            const m = line.match(/^\s{6,}([a-zA-Z_-]+):\s*(.*)$/);
+            const subK = m[1].trim();
+            let subV = m[2].trim().replace(/^["']|["']$/g, '');
+            if (subV.toLowerCase() === 'true') subV = true;
+            else if (subV.toLowerCase() === 'false') subV = false;
+            else if (/^\d+$/.test(subV)) subV = parseInt(subV, 10);
+            currentProxy[currentSubKey][subK] = subV;
+            continue;
+          }
+
+          // 5. Top-level property of current proxy
+          if (currentProxy && line.match(/^\s+([a-zA-Z_-]+):\s*(.*)$/)) {
+            const m = line.match(/^\s+([a-zA-Z_-]+):\s*(.*)$/);
+            const k = m[1].trim();
+            let v = m[2].trim().replace(/^["']|["']$/g, '');
+            if (v.toLowerCase() === 'true') v = true;
+            else if (v.toLowerCase() === 'false') v = false;
+            else if (/^\d+$/.test(v)) v = parseInt(v, 10);
+            currentProxy[k] = v;
+            currentSubKey = null;
+          }
+        }
+        if (currentProxy) {
+          const n = convertClashProxyToNode(currentProxy);
+          if (n) results.push(n);
+        }
+      } catch (e) {
+        console.warn('Clash YAML parse error', e);
+      }
+      return results;
+    }
+
+    function convertClashProxyToNode(cp) {
+      if (!cp || !cp.server) return null;
+      const type = (cp.type || '').toLowerCase();
+      const name = cp.name || `${cp.server}:${cp.port}`;
+      const port = parseInt(cp.port, 10) || 443;
+      const network = (cp.network || '').toLowerCase();
+
+      // --- 1. Shadowsocks ---
+      if (type === 'ss' || type === 'shadowsocks') {
+        const outbound = {
+          type: "shadowsocks",
+          tag: name,
+          server: cp.server,
+          server_port: port,
+          method: cp.cipher,
+          password: cp.password
+        };
+        return { tag: name, type: "shadowsocks", server: cp.server, server_port: port, raw_outbound: outbound };
+      }
+
+      // --- 2. VLESS (Supports TCP, Reality, WebSocket Cloudflare, gRPC) ---
+      if (type === 'vless') {
+        const outbound = {
+          type: "vless",
+          tag: name,
+          server: cp.server,
+          server_port: port,
+          uuid: cp.uuid,
+          packet_encoding: "xudp"
+        };
+        if (cp.flow) outbound.flow = cp.flow;
+
+        // TLS & Reality
+        const isTls = cp.tls === true || cp.tls === 'true' || cp.reality_opts || cp['reality-opts'];
+        if (isTls) {
+          outbound.tls = {
+            enabled: true,
+            server_name: cp.servername || cp.sni || cp.server,
+            insecure: cp['skip-cert-verify'] === true || cp['skip-cert-verify'] === 'true',
+            utls: { enabled: true, fingerprint: cp.client_fingerprint || cp['client-fingerprint'] || "chrome" }
+          };
+          const rOpts = cp.reality_opts || cp['reality-opts'];
+          if (rOpts) {
+            outbound.tls.reality = {
+              enabled: true,
+              public_key: rOpts['public-key'] || rOpts.public_key || '',
+              short_id: rOpts['short-id'] || rOpts.short_id || ''
+            };
+          }
+        }
+
+        // Transport: WebSocket (Cloudflare Workers/Pages CDN nodes)
+        if (network === 'ws' || cp['ws-opts'] || cp.ws_opts || cp.path) {
+          const wsOpts = cp['ws-opts'] || cp.ws_opts || {};
+          const wsPath = wsOpts.path || cp.path || '/';
+          let hostHeader = '';
+          if (wsOpts.headers && (wsOpts.headers.Host || wsOpts.headers.host)) {
+            hostHeader = wsOpts.headers.Host || wsOpts.headers.host;
+          } else if (cp.servername || cp.sni) {
+            hostHeader = cp.servername || cp.sni;
+          } else {
+            hostHeader = cp.server;
+          }
+          outbound.transport = {
+            type: "ws",
+            path: wsPath,
+            headers: { Host: hostHeader }
+          };
+        } else if (network === 'grpc' || cp['grpc-opts'] || cp.grpc_opts) {
+          const gOpts = cp['grpc-opts'] || cp.grpc_opts || {};
+          outbound.transport = {
+            type: "grpc",
+            service_name: gOpts['grpc-service-name'] || gOpts.service_name || ''
+          };
+        }
+
+        return { tag: name, type: "vless", server: cp.server, server_port: port, raw_outbound: outbound };
+      }
+
+      // --- 3. Hysteria 2 (hy2) ---
+      if (type === 'hysteria2' || type === 'hy2') {
+        const outbound = {
+          type: "hysteria2",
+          tag: name,
+          server: cp.server,
+          server_port: port,
+          password: cp.password || cp.auth || '',
+          tls: {
+            enabled: true,
+            server_name: cp.sni || cp.servername || cp.server,
+            insecure: cp['skip-cert-verify'] === true || cp['skip-cert-verify'] === 'true'
+          }
+        };
+        if (cp.obfs) {
+          outbound.obfs = {
+            type: "salamander",
+            password: cp['obfs-password'] || cp.obfs_password || cp.obfs
+          };
+        }
+        if (cp.up) outbound.up_mbps = parseInt(cp.up, 10);
+        if (cp.down) outbound.down_mbps = parseInt(cp.down, 10);
+        return { tag: name, type: "hysteria2", server: cp.server, server_port: port, raw_outbound: outbound };
+      }
+
+      // --- 4. Trojan ---
+      if (type === 'trojan') {
+        const outbound = {
+          type: "trojan",
+          tag: name,
+          server: cp.server,
+          server_port: port,
+          password: cp.password || '',
+          tls: {
+            enabled: true,
+            server_name: cp.sni || cp.servername || cp.server,
+            insecure: cp['skip-cert-verify'] === true || cp['skip-cert-verify'] === 'true'
+          }
+        };
+        if (network === 'ws' || cp['ws-opts'] || cp.ws_opts) {
+          const wsOpts = cp['ws-opts'] || cp.ws_opts || {};
+          outbound.transport = {
+            type: "ws",
+            path: wsOpts.path || '/',
+            headers: { Host: (wsOpts.headers && (wsOpts.headers.Host || wsOpts.headers.host)) || cp.servername || cp.server }
+          };
+        }
+        return { tag: name, type: "trojan", server: cp.server, server_port: port, raw_outbound: outbound };
+      }
+
+      // --- 5. TUIC ---
+      if (type === 'tuic') {
+        const outbound = {
+          type: "tuic",
+          tag: name,
+          server: cp.server,
+          server_port: port,
+          uuid: cp.uuid,
+          password: cp.password || '',
+          congestion_control: cp['congestion-controller'] || cp.congestion_control || 'bbr',
+          tls: {
+            enabled: true,
+            server_name: cp.sni || cp.servername || cp.server,
+            insecure: cp['skip-cert-verify'] === true || cp['skip-cert-verify'] === 'true'
+          }
+        };
+        return { tag: name, type: "tuic", server: cp.server, server_port: port, raw_outbound: outbound };
+      }
+
+      return null;
+    }
+
+    async function fetchAndParseSubNodes(subUrl, filterInfo=true) {
+      const res = await fetch('/weblog/api.cgi?action=fetch_sub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `url=${encodeURIComponent(subUrl)}`
+      });
+      const data = await res.json();
+      if (!data.success || !data.data_b64) {
+        throw new Error(data.error || '获取订阅失败');
+      }
+
+      let rawText = '';
+      try {
+        rawText = decodeURIComponent(escape(atob(data.data_b64))).trim();
+      } catch (e) {
+        rawText = atob(data.data_b64).trim();
+      }
+
+      return parseSubscriptionPayload(rawText, filterInfo);
+    }
+
+    function parseSubscriptionPayload(rawText, filterInfo=true) {
+      let parsedNodes = [];
+      const isInfoTag = (tag) => {
+        if (!filterInfo) return false;
+        const keywords = ['剩余流量', '到期', '重置', '官网', '通知', '公告', '群组', '客服', 'TG群', 'QQ群', '防失联'];
+        return keywords.some(k => tag.includes(k));
+      };
+
+      // 1. Sing-box JSON / Clash-Meta JSON
+      try {
+        const jsonCfg = JSON.parse(rawText);
+        if (jsonCfg && Array.isArray(jsonCfg.outbounds)) {
+          const ignoreTypes = ['direct', 'block', 'dns', 'selector', 'urltest'];
+          jsonCfg.outbounds.forEach(ob => {
+            const t = ob.type;
+            const tag = ob.tag || '';
+            if (t && !ignoreTypes.includes(t) && ob.server) {
+              if (!isInfoTag(tag)) {
+                parsedNodes.push({
+                  tag: tag,
+                  type: t,
+                  server: ob.server,
+                  server_port: ob.server_port || 443,
+                  raw_outbound: ob
+                });
+              }
+            }
+          });
+        }
+      } catch (e) {}
+
+      // 2. Clash YAML
+      if (parsedNodes.length === 0 && rawText.includes('proxies:')) {
+        const clashNodes = parseClashYamlProxies(rawText);
+        parsedNodes = clashNodes.filter(n => !isInfoTag(n.tag));
+      }
+
+      // 3. Base64 or plain text URLs
+      if (parsedNodes.length === 0) {
+        let textToScan = rawText;
+        if (!textToScan.includes('://')) {
+          try {
+            textToScan = atob(textToScan.replace(/\s+/g, ''));
+          } catch (e) {}
+        }
+        const regex = /(?:vless|vmess|hysteria2|hy2|tuic|trojan|ss):\/\/[^\s"',;]+/gi;
+        const matches = textToScan.match(regex) || [];
+        matches.forEach(link => {
+          const p = parseNodeUrl(link);
+          if (p && !isInfoTag(p.tag)) {
+            parsedNodes.push(p);
+          }
+        });
+      }
+
+      return parsedNodes;
+    }
+
+    async function updateSubscription(subId, isBatch=false) {
+      let sub = subscriptionsList.find(s => s.id === subId || s.name === subId);
+      if (!sub && subscriptionsList.length === 1) sub = subscriptionsList[0];
+      if (!sub) {
+        if (!isBatch) showToast('未找到指定订阅', 'error');
+        return false;
+      }
+      if (!sub.id) sub.id = 'sub_1';
+      if (!isBatch) showToast(`正在更新订阅「${sub.name}」...`, 'info');
+
+      try {
+        const newNodes = await fetchAndParseSubNodes(sub.url, sub.filter_info !== false);
+        if (!newNodes || newNodes.length === 0) {
+          if (!isBatch) showToast(`未能从订阅「${sub.name}」识别出有效节点，已保留现有节点`, 'error');
+          return false;
+        }
+
+        // Tag new nodes
+        newNodes.forEach(n => {
+          n.sub_id = sub.id;
+          n.group = sub.name;
+        });
+
+        // Replace old nodes for this subscription
+        nodesList = nodesList.filter(n => n.sub_id !== sub.id && n.group !== sub.name);
+        nodesList.push(...newNodes);
+
+        sub.node_count = newNodes.length;
+        sub.updated_at = formatCurrentTime();
+
+        // Verify active node
+        const nodeTags = nodesList.map(n => n.tag);
+        if (!nodeTags.includes(activeNodeTag)) {
+          activeNodeTag = newNodes[0] ? newNodes[0].tag : (nodesList[0] ? nodesList[0].tag : '');
+        }
+
+        if (!isBatch) {
+          renderSubscriptions();
+          renderGroupFilters();
+          renderNodes();
+          await saveFullProxyConfig(true);
+          showToast(`订阅「${sub.name}」更新完成！已同步 ${newNodes.length} 个可用节点`, 'success', TOAST_ICON_OK);
+        }
+        return true;
+      } catch (err) {
+        console.error('Update sub error', err);
+        if (!isBatch) showToast(`更新订阅「${sub.name}」失败: ${err.message || err}`, 'error');
+        return false;
+      }
+    }
+
+    async function updateAllSubscriptions() {
+      if (isUpdatingSubs) return;
+      if (!subscriptionsList || subscriptionsList.length === 0) {
+        showToast('暂无已保存的订阅，请先点击「添加新订阅」', 'warning');
+        return;
+      }
+
+      const btn = document.getElementById('btn-update-all-subs');
+      isUpdatingSubs = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span> 正在更新全部...';
+      }
+      showToast(`开始批量更新全部 ${subscriptionsList.length} 个订阅...`, 'info');
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < subscriptionsList.length; i++) {
+        const s = subscriptionsList[i];
+        showToast(`正在更新 (${i + 1}/${subscriptionsList.length}): 「${s.name}」...`, 'info');
+        const ok = await updateSubscription(s.id, true);
+        if (ok) successCount++;
+        else failCount++;
+      }
+
+      renderSubscriptions();
+      renderGroupFilters();
+      renderNodes();
+      await saveFullProxyConfig(true);
+
+      isUpdatingSubs = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> 一键更新全部订阅';
+      }
+
+      if (failCount === 0) {
+        showToast(`全部 ${successCount} 个订阅已全部更新成功！当前共 ${nodesList.length} 个节点`, 'success', TOAST_ICON_OK);
+      } else {
+        showToast(`订阅更新完成: ${successCount} 个成功，${failCount} 个失败，当前共 ${nodesList.length} 个节点`, 'warning');
+      }
+    }
+
+    function deleteSubscription(subId) {
+      let sub = subscriptionsList.find(s => s.id === subId || s.name === subId);
+      if (!sub && subscriptionsList.length === 1) sub = subscriptionsList[0];
+      if (!sub) return;
+
+      const subIdToDelete = sub.id || 'sub_1';
+      const subNameToDelete = sub.name;
+      const subNodes = nodesList.filter(n => n.sub_id === subIdToDelete || n.group === subNameToDelete);
+      const msg = `确定要删除订阅「${subNameToDelete}」吗？\n\n点击「确定」将同时删除该订阅下的 ${subNodes.length} 个节点。\n点击「取消」放弃操作。`;
+      if (!confirm(msg)) return;
+
+      nodesList = nodesList.filter(n => n.sub_id !== subIdToDelete && n.group !== subNameToDelete);
+      subscriptionsList = subscriptionsList.filter(s => s.id !== subIdToDelete && s.name !== subNameToDelete);
+
+      if (currentGroupFilter === sub.name || currentGroupFilter === sub.id) {
+        currentGroupFilter = 'all';
+      }
+      const nodeTags = nodesList.map(n => n.tag);
+      if (!nodeTags.includes(activeNodeTag)) {
+        activeNodeTag = nodeTags[0] || '';
+      }
+
+      renderSubscriptions();
+      renderGroupFilters();
+      renderNodes();
+      saveFullProxyConfig(true);
+      showToast(`已删除订阅「${sub.name}」及其关联节点`, 'info');
+    }
+
+    function parseRawLinks() {
+      const txt = document.getElementById('raw-links-input').value.trim();
+      if (!txt) { showToast('请输入节点链接', 'error'); return; }
+      const targetGroup = document.getElementById('manual-group-select').value || '自建/手动导入';
+      const targetSub = subscriptionsList.find(s => s.name === targetGroup);
+      const targetSubId = targetSub ? targetSub.id : 'manual';
+
+      const regex = /(?:vless|vmess|hysteria2|hy2|tuic|trojan|ss):\/\/[^\s"',;]+/gi;
+      const matches = txt.match(regex) || [];
+
+      let count = 0;
+      matches.forEach(link => {
+        const parsed = parseNodeUrl(link);
+        if (parsed) {
+          parsed.group = targetGroup;
+          parsed.sub_id = targetSubId;
+          nodesList = nodesList.filter(n => n.tag !== parsed.tag);
+          nodesList.push(parsed);
+          count++;
+        }
+      });
+
+      if (count > 0) {
+        if (!activeNodeTag && nodesList[0]) activeNodeTag = nodesList[0].tag;
+        if (targetSub) {
+          targetSub.node_count = nodesList.filter(n => n.sub_id === targetSub.id).length;
+        }
+        renderSubscriptions();
+        renderGroupFilters();
+        renderNodes();
+        saveFullProxyConfig(true);
+        closeManualImportModal();
+        document.getElementById('raw-links-input').value = '';
+        showToast(`成功导入 ${count} 个节点到分组「${targetGroup}」！`, 'success');
+      } else {
+        showToast('未能识别出支持的节点链接，请检查格式', 'error');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchCellular(false);
+      loadProxyConfig();
+      setInterval(() => fetchCellular(false), 3000);
+
+      // Drag & Drop for QR Code
+      const dropzone = document.getElementById('qr-dropzone');
+      if (dropzone) {
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--primary)'; });
+        dropzone.addEventListener('dragleave', (e) => { e.preventDefault(); dropzone.style.borderColor = 'var(--card-border)'; });
+        dropzone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropzone.style.borderColor = 'var(--card-border)';
+          if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            decodeQrImage(e.dataTransfer.files[0]);
+          }
+        });
+      }
+
+      // Clipboard Paste for QR Code Screenshot
+      window.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || window.clipboardData).items;
+        for (let item of items) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const blob = item.getAsFile();
+            openManualImportModal();
+            switchManualTab('qr');
+            decodeQrImage(blob);
+            break;
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

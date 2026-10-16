@@ -1,0 +1,13 @@
+# Shell 脚本 / CGI 必须用 LF（设备是 Linux，CRLF 会导致执行报错）
+*.sh   text eol=lf
+*.cgi  text eol=lf
+
+# 其它文本默认 LF
+*.py   text eol=lf
+*.md   text eol=lf
+
+# 二进制
+*.gz   binary
+*.png  binary
+*.jpg  binary
+*.zip  binary
