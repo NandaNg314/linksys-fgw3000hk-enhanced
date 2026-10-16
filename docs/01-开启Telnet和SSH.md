@@ -66,8 +66,11 @@
 
 ## 四、第 2 步：生成 `new_config.bin`
 
+进入 `tools/` 目录执行（脚本会在**脚本目录**和**当前目录**查找 `Config`，输出也在脚本目录）：
+
 ```bash
-python tools/enable_telnet.py
+cd tools
+python enable_telnet.py
 ```
 
 正常输出类似：

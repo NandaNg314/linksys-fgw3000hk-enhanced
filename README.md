@@ -137,14 +137,15 @@ FGW3000-HK 原厂固件里**本来就内置了 Telnet 和 SSH 服务**，只是�
        });
      })();
      ```
-3. 把下载的文件重命名为 `Config`（无扩展名），和 `tools/enable_telnet.py` 放同一目录。
+3. 把下载的文件重命名为 `Config`（无扩展名），放到 `tools/` 目录下。
 
 #### 3.2 生成开权限包
 
 ```bash
 pip install cryptography
-python tools/enable_telnet.py
-# 生成 new_config.bin
+cd tools
+python enable_telnet.py
+# 生成 tools/new_config.bin
 ```
 
 #### 3.3 刷入并重启
@@ -213,7 +214,7 @@ sh /mnt/jffs2/auto_carrier.sh force_ct    # 电信 SA；移动=force_cmcc，联�
 
 **验证**：`AT+C5GREG?` 返回 `+C5GREG: 0,1` 即 SA 注册成功；面板会显示 `5G n78`。
 
-> 完整说明（键值、验证、排错）见 [`docs/03-原理与常见问题.md`](docs/03-原理与常见问题.md#10-开启国内-5g-sa重要背景)。
+> 完整说明（键值、验证、排错）见 [`docs/03-原理与常见问题.md`](docs/03-原理与常见问题.md) 的「1.0 开启国内 5G SA」小节。
 
 ---
 

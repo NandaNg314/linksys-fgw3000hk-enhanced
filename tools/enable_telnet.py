@@ -132,16 +132,25 @@ def modify_sshd(content: str) -> str:
 
 
 def main():
-    # 查找输入文件
+    # 输入文件：优先脚本所在目录（用户通常把 Config 放这里），其次当前目录
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     input_file = None
     for cand in CANDIDATE_INPUTS:
-        if os.path.exists(cand):
-            input_file = cand
+        for base in (script_dir, os.getcwd()):
+            p = os.path.join(base, cand)
+            if os.path.exists(p):
+                input_file = p
+                break
+        if input_file:
             break
 
     if not input_file:
         print(f"[!] 未找到配置文件，已尝试查找: {CANDIDATE_INPUTS}")
+        print(f"    查找目录: {script_dir}  和  {os.getcwd()}")
         sys.exit(1)
+
+    # 输出写到脚本所在目录
+    output_file = os.path.join(script_dir, OUTPUT_FILE)
 
     print(f"[*] 读取原始备份包: {input_file}")
     with open(input_file, 'rb') as f:
@@ -230,16 +239,16 @@ def main():
     print("[*] 正在进行 AES-128-CBC 加密打包...")
     new_enc = encrypt_backup(new_tar_data)
 
-    with open(OUTPUT_FILE, 'wb') as f:
+    with open(output_file, 'wb') as f:
         f.write(new_enc)
-    print(f"[+] 成功生成配置包: {OUTPUT_FILE} ({len(new_enc)} 字节)")
+    print(f"[+] 成功生成配置包: {output_file} ({len(new_enc)} 字节)")
     print()
     print("=" * 65)
     print("【下一步恢复操作】")
     print("1. 浏览器打开 Linksys 管理后台: http://192.168.15.1")
     print("2. 进入 系统管理 (Management) -> 软件/固件更新 (Software)")
     print("3. 在「配置备份 (Configuration backup)」卡片中：")
-    print(f"   - 点击 [浏览/Browse] 按钮，选择: {os.path.abspath(OUTPUT_FILE)}")
+    print(f"   - 点击 [浏览/Browse] 按钮，选择: {output_file}")
     print("   - 点击 [恢复/Restore] 按钮")
     print("   - 弹出密码框时，输入任意 9 位以上字符 (例如: test12345)")
     print("   - 点击 [应用/Apply]")
