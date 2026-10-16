@@ -981,8 +981,11 @@
     let searchKeyword = '';
     let isUpdatingSubs = false;
     const PRESET_ADBLOCK_DOMAINS = [
-      // 酷安自身开屏与打点追踪 (保持应用核心功能可用，秒跳开屏)
+      // 酷安 (Coolapk) 自身开屏与打点追踪（仅封广告/统计子域，保留 api/app 正常功能）
       "tracking.coolapk.com", "analytics.coolapk.com", "splash.coolapk.com", "log.coolapk.com",
+      "data.coolapk.com", "adservice.coolapk.com", "ads.coolapk.com", "ad.coolapk.com",
+      "report.coolapk.com", "stat.coolapk.com", "splashad.coolapk.com", "adapi.coolapk.com",
+      "market.coolapk.com", "recommend.coolapk.com", "gdt.coolapk.com", "csj.coolapk.com",
       // 哔哩哔哩 (Bilibili) 开屏广告、商业化打点与内置 HTTPDNS (秒过启动页开屏，不影响正常刷视频与直播)
       "cm.bilibili.com", "ad.bilibili.com", "e.bilibili.com", "data.bilibili.com",
       "track.bilibili.com", "activity.hdslb.com", "httpdns.bilibili.com",
@@ -991,17 +994,26 @@
       "oceanengine.com", "ad.oceanengine.com", "ad.douyin.com", "e.douyin.com", "ad.toutiao.com",
       "toblog.ctobsnssdk.com", "mon.snssdk.com", "is.snssdk.com", "bytegoofy.com",
       "lf6-cdn-tos.bytegoofy.com", "lf9-cdn-tos.bytegoofy.com", "lf3-cdn-tos.bytegoofy.com",
+      "pangolin-sdk-toutiao-b.com", "pglstatp-toutiao.com", "ad.snssdk.com", "adservice.snssdk.com",
+      "log.snssdk.com", "log-api.snssdk.com", "dig.snssdk.com", "admate.snssdk.com",
       // 腾讯优量汇广告联盟
       "gdt.qq.com", "mi.gdt.qq.com", "win.gdt.qq.com", "qzs.qq.com", "tmead.y.qq.com", "e.qq.com",
-      "pgdt.gtimg.cn", "splashqzs.qq.com",
+      "pgdt.gtimg.cn", "splashqzs.qq.com", "v.gdt.qq.com", "ad.qq.com", "ads.qq.com",
       // 百度百青藤广告联盟
       "mobads.baidu.com", "mobads-logs.baidu.com", "pos.baidu.com", "cpro.baidu.com", "cbjs.baidu.com",
+      "afd.baidu.com", "union.baidu.com", "mobads-pre-config.baidu.com",
       // 快手广告联盟
-      "e.kuaishou.com", "open.e.kuaishou.com", "ad.partner.gifshow.com",
-      // 酷安等 App 常用聚合开屏联盟 (SigMob风铃, 倍孜Beizi, TopOn, Gromore)
-      "sigmob.cn", "sigmob.com", "adservice.sigmob.cn", "beizi.biz", "toponad.com", "gromore.cn", "ad.snssdk.com",
+      "e.kuaishou.com", "open.e.kuaishou.com", "ad.partner.gifshow.com", "ad.kuaishou.com",
+      // 聚合/联盟 (SigMob风铃, 倍孜Beizi, TopOn, Gromore, 欢太, 米盟)
+      "sigmob.cn", "sigmob.com", "adservice.sigmob.cn", "beizi.biz", "toponad.com", "gromore.cn",
+      "windmill.com", "ssp.huawei.com", "ads.huawei.com", "adx.huawei.com",
+      "mi.gdt.qq.com", "ad.xiaomi.com", "tracking.miui.com", "stat.miui.com",
+      "ad.oppomobile.com", "i.ad.oppomobile.com", "sdk.ad.oppomobile.com",
+      "ad.vivo.com.cn", "adx.vivo.com.cn",
+      // 阿里/友盟统计
+      "adash.m.taobao.com", "adashbc.ut.taobao.com", "ut.taobao.com", "log.mmstat.com",
       // 常见 HTTPDNS 域名 (防 App 绕过路由 DNS 强拉广告)
-      "httpdns.alicdn.com", "httpdns.baidubce.com"
+      "httpdns.alicdn.com", "httpdns.baidubce.com", "httpdns.made-in-china.com", "httpdns.meituan.com"
     ];
 
     let customRules = {
