@@ -50,6 +50,16 @@ fi
 mkdir -p /mnt/jffs2/ssl/certs
 grep -q " /etc/ssl/certs " /proc/mounts || mount --bind /mnt/jffs2/ssl/certs /etc/ssl/certs 2>/dev/null
 
+# 2.5 修复 curl 默认读不到 CA 根证书（部分固件 curl 未内置默认 CAfile）
+#     用环境变量让 curl/wget 等默认信任系统根证书（不改只读固件）
+CA_FILE=/etc/ssl/certs/ca-certificates.crt
+if [ -f "$CA_FILE" ]; then
+    export CURL_CA_BUNDLE="$CA_FILE"
+    export SSL_CERT_FILE="$CA_FILE"
+    echo "export CURL_CA_BUNDLE=$CA_FILE" > /tmp/.cacert.env
+    echo "export SSL_CERT_FILE=$CA_FILE" >> /tmp/.cacert.env
+fi
+
 # 3. 官方后台与 Dashboard 允许纯 HTTP (80端口) 访问，消除浏览器证书报错
 if [ ! -f /tmp/.lighttpd_patched ]; then
     cp /etc/lighttpd/lighttpd.conf.sh /tmp/lighttpd.conf.sh 2>/dev/null

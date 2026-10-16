@@ -11,8 +11,8 @@
 > **⚠️ HTML / scripts / config pack are for Linksys FGW3000-HK (HK version) ONLY.**
 
 An open-source project for the **Linksys FGW3000-HK** 5G CPE:
-**unlock Telnet/SSH** + a **geek web dashboard** (band lock, carrier switch,
-transparent proxy via Sing-box, SmartDNS + Anti-AD whole-home ad-blocking).
+**unlock Telnet/SSH** + **enable 5G SA / unlock CN bands** + a **geek web dashboard**
+(band lock, carrier switch, transparent proxy via Sing-box, SmartDNS + Anti-AD whole-home ad-blocking).
 
 > ⚠️ **Disclaimer / 免责声明**
 > 仅供 **Linksys FGW3000-HK 同型号自有设备** 的技术研究与学习。
@@ -29,11 +29,19 @@ transparent proxy via Sing-box, SmartDNS + Anti-AD whole-home ad-blocking).
 | 原厂状态（痛点） | 本项目之后（你能做的） |
 | --- | --- |
 | 没有 Telnet/SSH，进不去系统，什么都改不了 | **永久开启 Telnet/SSH，root 直入**，想怎么折腾都行 |
+| **原厂固件默认未开启 5G SA**，国内 5G 用不上/受限 | **开启 5G SA 并放开国内频段（n1/n3/n5/n28/n78/n79）**，正常驻留国内 5G |
 | 5G 频段/运营商基本没法选，信号不好只能忍着 | **可视化锁频段 / 切运营商**，弱信号、拥堵基站都能规避 |
 | 没法做全屋科学上网 | **全屋透明代理（Sing-box TUN）**，局域网设备零配置出海 |
 | 广告满天飞、DNS 慢 | **SmartDNS 加速 + Anti-AD 近 10 万条规则全屋去广告** |
 | 官方 Web 后台功能寒酸 | **一套漂亮的极客 Web 控制台**（Apple 风、深浅色自适应） |
 | 改错了可能失联、变砖 | 所有改动走 `/mnt/jffs2` + 启动自愈 + 看门狗，稳定可回滚 |
+
+> **关于 5G**：FGW3000-HK 的基带（高通 SDX55）**硬件支持 5G SA**，但**原厂固件默认没有开启 SA**
+> （偏向 NSA / 频段受限）。本项目通过修改设备 NV 配置（`threeG_network_mode` / `threeG_network_sa_mode`
+> / 放开 `NR_FullBand`），**开启国内 5G SA 并放开国内频段**。
+> **实测参考**：5G SA（n78, 100MHz）下国内多源实测下行约 **130~145 Mbps**；
+> 实际速率取决于**信号强度、基站负载、时段与位置**，**本项目不承诺固定速率**。
+> 原理与完整键值见 [docs/03](docs/03-原理与常见问题.md)。
 
 **适合谁**：想让手头这台 FGW3000-HK 发挥全部实力、又不想刷第三方固件的玩家。
 **不适合谁**：非 FGW3000-HK 的其他路由器；不想动手、只想要开箱即用固件的人。
