@@ -14,6 +14,18 @@ An open-source project for the **Linksys FGW3000-HK** 5G CPE:
 **unlock Telnet/SSH** + **enable 5G SA / unlock CN bands** + a **geek web dashboard**
 (band lock, carrier switch, transparent proxy via Sing-box, SmartDNS + Anti-AD whole-home ad-blocking).
 
+### 界面预览 / Screenshots
+
+| 蜂窝与锁频段（浅色） | 全屋代理节点（浅色） |
+| :---: | :---: |
+| ![蜂窝与锁频段](docs/images/dashboard-light-cell.png) | ![全屋代理节点](docs/images/dashboard-light-proxy.png) |
+
+| 分流规则配置（浅色） | 深色模式 |
+| :---: | :---: |
+| ![分流规则配置](docs/images/dashboard-light-rules.png) | ![深色模式](docs/images/dashboard-dark-cell.png) |
+
+> 面板遵循 Apple HIG 风格：浅色/深色自适应（右上角可手动切换），零彩色 Emoji，纯单色线性图标。
+
 > ⚠️ **Disclaimer / 免责声明**
 > 仅供 **Linksys FGW3000-HK 同型号自有设备** 的技术研究与学习。
 > 请勿用于任何未授权设备。据此操作产生的一切后果由使用者自负。
@@ -246,7 +258,8 @@ linksys-fgw3000hk-enhanced/
 ├── docs/
 │   ├── 01-开启Telnet和SSH.md     开权限详细步骤
 │   ├── 02-部署与配置.md          面板部署 + 按需配置
-│   └── 03-原理与常见问题.md       解锁原理 + FAQ
+│   ├── 03-原理与常见问题.md       解锁原理 + FAQ
+│   └── images/                   界面截图
 ├── tools/
 │   └── enable_telnet.py         从本机 Config 生成 new_config.bin
 └── dashboard/                   极客 Web 控制台
