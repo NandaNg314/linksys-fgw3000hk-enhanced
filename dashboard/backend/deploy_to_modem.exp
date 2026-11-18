@@ -1,0 +1,44 @@
+set target_ip [lindex $argv 0]
+if {$target_ip == ""} { set target_ip "10.10.10.3" }
+
+proc patch_modem {port tmo} {
+    global target_ip
+    set timeout $tmo
+    spawn telnet $target_ip $port
+    expect {
+        "/ # " {
+            send "mkdir -p /data/www/cgi-bin\r"
+            expect "/ # "
+            send "if ! sh -n /data/oem_init_post.sh 2>/dev/null; then sed -i 's/fi(.*/fi/' /data/oem_init_post.sh; grep -q 'probe_ambr.pl' /data/oem_init_post.sh || printf '\\nif \[ -x /data/probe_ambr.pl \]; then\\n    /data/probe_ambr.pl >/dev/null 2>&1 &\\nfi\\n' >> /data/oem_init_post.sh; sh /data/oem_init_post.sh & sleep 1; fi\r"
+            expect "/ # "
+            send "if ! pgrep -f 'busybox httpd.*55102' >/dev/null 2>&1; then busybox httpd -p 10.10.10.3:55102 -h /data/www; fi\r"
+            expect "/ # "
+            send "if ! pgrep -f 'telnetd.*55101' >/dev/null 2>&1; then /usr/lib/busybox/usr/sbin/telnetd -l /bin/sh -b 0.0.0.0:55101 -K & fi\r"
+            expect "/ # "
+            send "if \[ -x /data/ims_sip \] && ! pgrep -f '^/data/ims_sip\$' >/dev/null 2>&1; then nohup /data/ims_sip >/dev/null 2>&1 & fi\r"
+            expect "/ # "
+            send "grep -q '/data/oem_init_post.sh' /oem/script/oem_init_post.sh || echo 'sh /data/oem_init_post.sh &' >> /oem/script/oem_init_post.sh\r"
+            expect "/ # "
+            send "sync\r"
+            expect "/ # "
+            send "exit\r"
+            expect eof
+            return 1
+        }
+        timeout {
+            catch {close}
+            catch {wait}
+            return 0
+        }
+        eof {
+            catch {wait}
+            return 0
+        }
+    }
+}
+
+if {![patch_modem 55101 8]} {
+    if {![patch_modem 55100 40]} {
+        puts "[-] 55101/55100 均连接超时"
+    }
+}

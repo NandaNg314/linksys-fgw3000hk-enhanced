@@ -1,0 +1,16 @@
+#!/bin/sh
+printf "Content-Type: application/json\r\n\r\n"
+TO=$(echo "$QUERY_STRING" | sed -n 's/.*msg=/**/;s/.*to=\([^&]*\).*/\1/p')
+MSG=$(echo "$QUERY_STRING" | sed -n 's/.*msg=\([^&]*\).*/\1/p')
+if [ -z "$TO" ]; then
+    echo '{"success":false,"error":"Missing to"}'
+    exit 0
+fi
+OUT=$(perl /data/send_sms.pl "$TO" "$MSG")
+if echo "$OUT" | grep -q 'Final Result:.*OK'; then
+    echo '{"success":true,"message":"Sent successfully"}'
+elif echo "$OUT" | grep -q 'ERROR'; then
+    echo '{"success":false,"error":"Modem reported error"}'
+else
+    echo '{"success":true,"message":"Send command executed"}'
+fi

@@ -1,0 +1,46 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Fcntl qw(:flock);
+print "Content-Type: text/plain\r\n\r\n";
+
+my $imsi = "";
+my $cache = "/tmp/.cached_imsi";
+if (open(my $cfh, "<", $cache)) {
+    my $c = <$cfh>;
+    close($cfh);
+    if ($c && $c =~ /(\d{14,15})/) { $imsi = $1; }
+}
+
+open(my $lock_fh, ">", "/tmp/.sms_at.lock") or die "lock failed";
+flock($lock_fh, LOCK_EX);
+
+if (!$imsi) {
+    my $cimi = `atcli 'AT+CIMI' 2>/dev/null`;
+    if ($cimi && $cimi =~ /(\d{14,15})/) {
+        $imsi = $1;
+        if (open(my $wfh, ">", $cache)) { print $wfh "$imsi\n"; close($wfh); }
+    }
+}
+print "IMSI=$imsi\n";
+
+my $rdp = `atcli 'AT+CGCONTRDP=3' 2>/dev/null`;
+flock($lock_fh, LOCK_UN);
+close($lock_fh);
+
+my ($line) = $rdp =~ /\+CGCONTRDP:\s*([^\r\n]+)/;
+if ($line) {
+    my @f = split(/,/, $line);
+    for my $i (3..$#f) {
+        my $v = $f[$i]; $v =~ s/^\s+|\s+$//g;
+        my @oct = split(/\./, $v);
+        if (@oct == 16) {
+            my $ip6 = join(":", map { sprintf("%02x%02x", $oct[2*$_], $oct[2*$_+1]) } 0..7);
+            if ($i == 3) {
+                print "IMS_IP=$ip6\n";
+            } elsif ($i >= 7) {
+                print "PCSCF=$ip6\n";
+            }
+        }
+    }
+}

@@ -84,7 +84,7 @@ cleanup_transparent_rules() {
 }
 
 while true; do
-    # 0. 核心路由基准保障（防止误删或策略路由混乱导致断网）
+    # 0. 核心路由基准保障
     ip rule show | grep -q "lookup local" || ip rule add lookup local pref 0 2>/dev/null
     ip rule show | grep -q "lookup main" || ip rule add lookup main pref 32766 2>/dev/null
     ip rule show | grep -q "lookup default" || ip rule add lookup default pref 32767 2>/dev/null
@@ -102,20 +102,20 @@ while true; do
         touch /tmp/.lighttpd_patched
     fi
 
-    # 0.2 确保 dnsmasq wrapper 挂载生效（使用 /proc/mounts 避免重复堆叠挂载）
+    # 0.2 确保 dnsmasq wrapper 挂载生效
     if [ -f /mnt/jffs2/proxy/dnsmasq_wrapper.sh ] && ! grep -q " /usr/sbin/dnsmasq " /proc/mounts; then
         [ -f /tmp/dnsmasq.real ] || cp /usr/sbin/dnsmasq /tmp/dnsmasq.real
         chmod +x /tmp/dnsmasq.real
         mount --bind /mnt/jffs2/proxy/dnsmasq_wrapper.sh /usr/sbin/dnsmasq 2>/dev/null
     fi
 
-    # 0.3 确保 Crontab 防篡改与 crond 守护常驻
+    # 0.3 确保 Crontab 防篡改与 crond 守护常驻（无 fota_alarm）
     CRON_DIR="/mnt/jffs2/conf/app"
     for cron_f in "$CRON_DIR/crontab.tab" "$CRON_DIR/root"; do
-        if [ ! -f "$cron_f" ] || ! grep -q '/mnt/jffs2/startup.sh' "$cron_f" 2>/dev/null; then
+        if [ ! -f "$cron_f" ] || ! grep -q '/mnt/jffs2/startup.sh' "$cron_f" 2>/dev/null || grep -q 'fota_alarm' "$cron_f" 2>/dev/null; then
             chattr -i "$cron_f" 2>/dev/null
-            echo "30 2 * * * /bin/mc_trigger fota_alarm 3" > "$cron_f" 2>/dev/null
-            echo "* * * * * /mnt/jffs2/startup.sh >/dev/null 2>&1" >> "$cron_f" 2>/dev/null
+            echo "* * * * * /mnt/jffs2/startup.sh >/dev/null 2>&1" > "$cron_f" 2>/dev/null
+            echo "30 4 * * 0 /mnt/jffs2/proxy/update_anti_ad.sh >/dev/null 2>&1" >> "$cron_f" 2>/dev/null
             chmod 600 "$cron_f" 2>/dev/null
             chattr +i "$cron_f" 2>/dev/null
         fi
@@ -136,37 +136,42 @@ while true; do
     fi
 
     # 2. 保证 Dnsmasq 指向 SmartDNS (6053) 与备用公共 DNS (223.5.5.5)
-    #    仅在启用 SmartDNS 时执行，否则保持原厂 DNS，避免指向不存在的 6053 断网。
     if [ -f /mnt/jffs2/proxy/smartdns ]; then
-        DNSMASQ_DIRTY=0
-        ad_conf="/mnt/jffs2/proxy/adblock_dnsmasq.conf"
-        if [ -f /tmp/dnsmasq.conf ]; then
-            if ! grep -q "127.0.0.1#6053" /tmp/dnsmasq.conf || ([ -f "$ad_conf" ] && ! grep -q "conf-file=$ad_conf" /tmp/dnsmasq.conf); then
-                log "Dnsmasq upstream lost. Re-pointing to SmartDNS 6053..."
-                [ -f "$ad_conf" ] && (grep -q "conf-file=$ad_conf" /tmp/dnsmasq.conf || echo "conf-file=$ad_conf" >> /tmp/dnsmasq.conf)
-                sed -i '/127.0.0.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
-                sed -i '/192.168.15.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
-                sed -i '/223.5.5.5/d' /tmp/dnsmasq.conf 2>/dev/null
-                sed -i '/strict-order/d' /tmp/dnsmasq.conf 2>/dev/null
-                sed -i '/no-resolv/d' /tmp/dnsmasq.conf 2>/dev/null
-                echo "strict-order" >> /tmp/dnsmasq.conf
-                echo "server=127.0.0.1#6053" >> /tmp/dnsmasq.conf
-                echo "server=223.5.5.5" >> /tmp/dnsmasq.conf
-                echo "no-resolv" >> /tmp/dnsmasq.conf
-                DNSMASQ_DIRTY=1
+        (
+            flock -x 8
+            DNSMASQ_DIRTY=0
+            ad_conf="/mnt/jffs2/proxy/adblock_dnsmasq.conf"
+            if [ -f /tmp/dnsmasq.conf ]; then
+                if ! grep -q "127.0.0.1#6053" /tmp/dnsmasq.conf || \
+                   ! grep -q "223.5.5.5" /tmp/dnsmasq.conf || \
+                   ! grep -q "strict-order" /tmp/dnsmasq.conf || \
+                   ([ -f "$ad_conf" ] && ! grep -q "conf-file=$ad_conf" /tmp/dnsmasq.conf); then
+                    log "Dnsmasq upstream lost. Re-pointing to SmartDNS 6053 + 223.5.5.5 fallback..."
+                    [ -f "$ad_conf" ] && (grep -q "conf-file=$ad_conf" /tmp/dnsmasq.conf || echo "conf-file=$ad_conf" >> /tmp/dnsmasq.conf)
+                    sed -i '/127.0.0.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
+                    sed -i '/192.168.15.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
+                    sed -i '/223.5.5.5/d' /tmp/dnsmasq.conf 2>/dev/null
+                    sed -i '/strict-order/d' /tmp/dnsmasq.conf 2>/dev/null
+                    sed -i '/no-resolv/d' /tmp/dnsmasq.conf 2>/dev/null
+                    echo "strict-order" >> /tmp/dnsmasq.conf
+                    echo "server=127.0.0.1#6053" >> /tmp/dnsmasq.conf
+                    echo "server=223.5.5.5" >> /tmp/dnsmasq.conf
+                    echo "no-resolv" >> /tmp/dnsmasq.conf
+                    DNSMASQ_DIRTY=1
+                fi
             fi
-        fi
-        if ! grep -q "127.0.0.1" /tmp/etc/resolv.conf 2>/dev/null; then
-            echo "nameserver 127.0.0.1" > /tmp/etc/resolv.conf
-        fi
-        if [ "$DNSMASQ_DIRTY" -eq 1 ] || ! pgrep -f "dnsmasq.*dnsmasq.conf" >/dev/null 2>&1; then
-            killall -9 dnsmasq dnsmasq.real dnsmasq_real 2>/dev/null
-            sleep 1
-            /usr/sbin/dnsmasq -i br0 -i lo --conntrack --bind-interfaces -K -N -C /tmp/dnsmasq.conf --pid-file=/var/run/dnsmasq.pid 2>/dev/null
-        fi
+            if ! grep -q "127.0.0.1" /tmp/etc/resolv.conf 2>/dev/null; then
+                echo "nameserver 127.0.0.1" > /tmp/etc/resolv.conf
+            fi
+            if [ "$DNSMASQ_DIRTY" -eq 1 ] || ! pgrep -f "dnsmasq.*dnsmasq.conf" >/dev/null 2>&1; then
+                killall -9 dnsmasq dnsmasq.real dnsmasq_real 2>/dev/null
+                sleep 1
+                /usr/sbin/dnsmasq -i br0 --conntrack --bind-interfaces -K -N -C /tmp/dnsmasq.conf --pid-file=/var/run/dnsmasq.pid 2>/dev/null 8>&-
+            fi
+        ) 8>/var/run/dnsmasq_cfg.lock
     fi
 
-    # 3. 根除 IPv6 运营商 DNS 广播投毒并封禁外发 IPv6 DNS
+    # 3. 根除 IPv6 运营商 DNS 广播投毒并封禁外发 IPv6 DNS 与 DoT 853
     if [ -f /tmp/etc/radvd.conf ] && grep -q "RDNSS" /tmp/etc/radvd.conf; then
         log "Removing IPv6 ISP DNS from radvd..."
         sed -i '/RDNSS/,/};/d' /tmp/etc/radvd.conf 2>/dev/null
@@ -174,8 +179,8 @@ while true; do
     fi
     ip6tables -C FORWARD -p udp --dport 53 -j REJECT 2>/dev/null || ip6tables -I FORWARD 1 -p udp --dport 53 -j REJECT
     ip6tables -C FORWARD -p tcp --dport 53 -j REJECT 2>/dev/null || ip6tables -I FORWARD 1 -p tcp --dport 53 -j REJECT
-#     iptables -C FORWARD -p tcp --dport 853 -j REJECT 2>/dev/null || iptables -I FORWARD 1 -p tcp --dport 853 -j REJECT
-#     ip6tables -C FORWARD -p tcp --dport 853 -j REJECT 2>/dev/null || ip6tables -I FORWARD 1 -p tcp --dport 853 -j REJECT
+    iptables -C FORWARD -p tcp --dport 853 -j REJECT 2>/dev/null || iptables -I FORWARD 1 -p tcp --dport 853 -j REJECT
+    ip6tables -C FORWARD -p tcp --dport 853 -j REJECT 2>/dev/null || ip6tables -I FORWARD 1 -p tcp --dport 853 -j REJECT
 
     # 4. 全天候阻断 HttpDNS 探针
     for hip in 203.107.1.1 203.107.1.33 203.107.1.34 119.29.29.98 119.29.29.99 182.254.116.116 180.76.76.200; do
@@ -209,7 +214,6 @@ while true; do
             killall radvd 2>/dev/null
         fi
     else
-        # 代理未启用：确保局域网 DNS 重定向至本地 SmartDNS，且清理残留 sing-box/规则
         iptables -t nat -C PREROUTING -i br0 -p udp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || \
         iptables -t nat -I PREROUTING 1 -i br0 -p udp --dport 53 -j REDIRECT --to-ports 53
         iptables -t nat -C PREROUTING -i br0 -p tcp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || \
@@ -219,7 +223,6 @@ while true; do
             log "Proxy disabled in config. Cleaning residual routing rules..."
             cleanup_transparent_rules
         elif pgrep -f "sing-box run" >/dev/null 2>&1; then
-            # 代理关闭但 sing-box 运行时（可能来自前端测速）：宽限 120 秒后释放内存
             cnt=$(cat /tmp/.singbox_idle_count 2>/dev/null || echo 0)
             cnt=$((cnt + 1))
             echo "$cnt" > /tmp/.singbox_idle_count
@@ -233,8 +236,8 @@ while true; do
         fi
     fi
 
-    # 6. 内存日志滚动防爆限额（防止长期运行导致 /tmp 内存耗尽）
-    for lf in "$LOG_FILE" /tmp/sing-box.log /tmp/dnsmasq.log /tmp/smartdns.log; do
+    # 6. 内存日志滚动防爆限额
+    for lf in "$LOG_FILE" /tmp/sing-box.log /tmp/dnsmasq.log /tmp/smartdns.log /tmp/lte_mgr/LCMServer.log /tmp/lte_freeze.log /tmp/blocked_reboots.log; do
         if [ -f "$lf" ]; then
             sz=$(wc -c < "$lf" 2>/dev/null || echo 0)
             if [ "$sz" -gt 300000 ]; then

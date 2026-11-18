@@ -1,7 +1,7 @@
 #!/bin/sh
 # ==============================================================================
 # Linksys FGW3000 dnsmasq Architecture Wrapper
-# Enforces loopback interface (lo) and SmartDNS (6053) convergence
+# Enforces loopback interface (lo) and SmartDNS (6053) + 223.5.5.5 fallback
 # ==============================================================================
 
 REAL_BIN="/tmp/dnsmasq.real"
@@ -16,7 +16,7 @@ if [ ! -x "$REAL_BIN" ]; then
     fi
 fi
 
-# 1. Update /tmp/dnsmasq.conf with SmartDNS upstream and fallback before starting
+# 1. Update /tmp/dnsmasq.conf keeping SmartDNS primary + 223.5.5.5 fallback
 if [ -f /tmp/dnsmasq.conf ]; then
     ad_conf="/mnt/jffs2/proxy/adblock_dnsmasq.conf"
     if [ -f "$ad_conf" ] && ! grep -q "conf-file=$ad_conf" /tmp/dnsmasq.conf; then
@@ -27,22 +27,52 @@ if [ -f /tmp/dnsmasq.conf ]; then
     sed -i '/223.5.5.5/d' /tmp/dnsmasq.conf 2>/dev/null
     sed -i '/strict-order/d' /tmp/dnsmasq.conf 2>/dev/null
     sed -i '/no-resolv/d' /tmp/dnsmasq.conf 2>/dev/null
+    echo "strict-order" >> /tmp/dnsmasq.conf
     echo "server=127.0.0.1#6053" >> /tmp/dnsmasq.conf
+    echo "server=223.5.5.5" >> /tmp/dnsmasq.conf
     echo "no-resolv" >> /tmp/dnsmasq.conf
-    echo "nameserver 127.0.0.1" > /tmp/etc/resolv.conf 2>/dev/null
+    grep -q "127.0.0.1" /tmp/etc/resolv.conf 2>/dev/null || echo "nameserver 127.0.0.1" > /tmp/etc/resolv.conf 2>/dev/null
 fi
 
-# 2. Filter out arguments that break loopback DNS resolution
+# 2. Filter out --except-interface=lo and deduplicate -i lo / --interface=lo
 NEW_ARGS=""
+HAS_LO=0
+PREV_I=0
 for a in "$@"; do
+    if [ "$PREV_I" -eq 1 ]; then
+        PREV_I=0
+        if [ "$a" = "lo" ]; then
+            if [ "$HAS_LO" -eq 1 ]; then
+                continue
+            fi
+            HAS_LO=1
+        fi
+        NEW_ARGS="$NEW_ARGS -i $a"
+        continue
+    fi
     case "$a" in
         *--except-interface=lo*)
+            ;;
+        -i)
+            PREV_I=1
+            ;;
+        --interface=lo)
+            if [ "$HAS_LO" -eq 0 ]; then
+                HAS_LO=1
+                NEW_ARGS="$NEW_ARGS $a"
+            fi
             ;;
         *)
             NEW_ARGS="$NEW_ARGS $a"
             ;;
     esac
 done
+[ "$PREV_I" -eq 1 ] && NEW_ARGS="$NEW_ARGS -i"
 
-# 3. Always include -i lo
-exec "$REAL_BIN" -i lo $NEW_ARGS
+# 3. Ensure single dnsmasq.real instance with single -i lo
+killall -9 dnsmasq.real dnsmasq_real 2>/dev/null
+if [ "$HAS_LO" -eq 1 ]; then
+    exec "$REAL_BIN" $NEW_ARGS
+else
+    exec "$REAL_BIN" -i lo $NEW_ARGS
+fi

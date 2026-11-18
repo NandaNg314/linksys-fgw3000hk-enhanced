@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+use strict; use warnings; use Socket;
+print "Content-Type: text/plain\r\n\r\n";
+my $qs = $ENV{QUERY_STRING} || "";
+my ($rand_h) = $qs =~ /rand=([0-9a-fA-F]+)/;
+my ($autn_h) = $qs =~ /autn=([0-9a-fA-F]+)/;
+if (!$rand_h || !$autn_h) { print "ERR=missing_args\n"; exit; }
+my $rand = pack("H*", $rand_h);
+my $autn = pack("H*", $autn_h);
+my $port = 67;
+open(my $ql, "qrtr-lookup |") or die $!;
+while (<$ql>) { if (/^\s*11\s+\d+\s+\d+\s+3\s+(\d+)/) { $port = int($1); last; } }
+close($ql);
+socket(my $s, 42, SOCK_DGRAM, 0) or die $!;
+my $dst = pack("S<x2I<I<", 42, 3, $port);
+my $aid = pack("H*", "a0000000871002ff86ffff89ffffffff");
+my $tlv1 = pack("CS<CC", 0x01, 2+length($aid), 0x00, length($aid)) . $aid;
+my $ap = pack("C", length($rand)) . $rand . pack("C", length($autn)) . $autn;
+my $tlv2 = pack("CS<CS<", 0x02, 3+length($ap), 0x03, length($ap)) . $ap;
+my $tlvs = $tlv1 . $tlv2;
+send($s, pack("CS<S<S<", 0, 1, 0x0034, length($tlvs)) . $tlvs, 0, $dst) or die $!;
+eval {
+    local $SIG{ALRM}=sub{die "timeout"}; alarm 3;
+    recv($s, my $b, 4096, 0); alarm 0;
+    print "RAW=" . unpack("H*", $b) . "\n";
+    my $off = 7;
+    while ($off + 3 <= length($b)) {
+        my ($t, $l) = unpack("CS<", substr($b, $off, 3));
+        my $v = substr($b, $off+3, $l);
+        if ($t == 0x11 && length($v) >= 2) {
+            my $cl = unpack("S<", substr($v, 0, 2));
+            my $c = substr($v, 2, $cl);
+            my $tag = ord(substr($c, 0, 1));
+            if ($tag == 0xDB) {
+                my $rl = ord(substr($c, 1, 1));
+                print "RES=" . unpack("H*", substr($c, 2, $rl)) . "\n";
+            } elsif ($tag == 0xDC) {
+                my $al = ord(substr($c, 1, 1));
+                print "AUTS=" . unpack("H*", substr($c, 2, $al)) . "\n";
+            } else {
+                print "SIM_RESP=" . unpack("H*", $c) . "\n";
+            }
+        }
+        $off += 3 + $l;
+    }
+};
+print "ERR=$@\n" if $@;

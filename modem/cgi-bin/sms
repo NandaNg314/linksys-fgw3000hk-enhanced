@@ -1,0 +1,3 @@
+#!/bin/sh
+printf "Content-Type: application/json\r\n\r\n"
+perl /data/parse_sms.pl

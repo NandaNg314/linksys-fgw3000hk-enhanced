@@ -23,5 +23,11 @@ Thumbs.db
 *.log
 *.tmp
 *.bak
+*.bak_*
 __pycache__/
 *.pyc
+sms_forward.json
+ims_inbox.json
+.seen_sms_sigs
+.deleted_ims_sigs
+.cached_ambr.json

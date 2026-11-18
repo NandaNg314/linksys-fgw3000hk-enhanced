@@ -1,0 +1,9 @@
+#!/bin/sh
+printf "Content-Type: application/json\r\n\r\n"
+TARGET=$(echo "$QUERY_STRING" | sed -n 's/.*target=\([^&]*\).*/\1/p')
+ARG2=$(echo "$QUERY_STRING" | sed -n 's/.*arg2=\([^&]*\).*/\1/p')
+if [ -z "$TARGET" ]; then
+    echo '{"ok":false,"error":"Missing target"}'
+    exit 0
+fi
+sh /data/del_sms.sh "$TARGET" "$ARG2"

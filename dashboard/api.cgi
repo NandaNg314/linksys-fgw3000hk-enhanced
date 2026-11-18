@@ -78,7 +78,7 @@ if [ "$ACTION" = "get_cellular" ]; then
 
     nr_bw_raw=$(get_cms_val "NR_Bandwidth")
     [ -z "$nr_bw_raw" ] && nr_bw_raw="0"
-    nr_bw_mhz=$((nr_bw_raw / 1000))
+    case "$nr_bw_raw" in *[0-9]*) nr_bw_mhz=$((nr_bw_raw / 1000)) ;; *) nr_bw_mhz="0" ;; esac
 
     cpu_temp=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo "0")
     modem_raw=$(cat /sys/class/thermal/thermal_zone12/temp 2>/dev/null || echo "0")
@@ -97,6 +97,44 @@ if [ "$ACTION" = "get_cellular" ]; then
     pgrep -f "smartdns.*smartdns.conf" >/dev/null 2>&1 && smartdns_running="true"
     rule_count=0
     [ -f /tmp/anti-ad-for-smartdns.conf ] && rule_count=$(wc -l < /tmp/anti-ad-for-smartdns.conf 2>/dev/null | tr -d ' ')
+
+    modem_json=$(curl -s --connect-timeout 1 -m 4 "http://10.10.10.3:55102/cgi-bin/cell_qos" 2>/dev/null)
+    if echo "$modem_json" | grep -q '"ok":true'; then
+        printf '%s\n' "$modem_json" > /tmp/.ap_cell_qos.cache 2>/dev/null
+    elif [ -f /tmp/.ap_cell_qos.cache ]; then
+        modem_json=$(cat /tmp/.ap_cell_qos.cache 2>/dev/null)
+    fi
+    jget() {
+        echo "$modem_json" | sed -n "s/.*\"$1\":\(\"[^\"]*\"\|[^,}]*\).*/\1/p" | head -n 1
+    }
+    qci_val="null"; qos_label_json="\"N/A\""
+    ambr_dl_val="null"; ambr_ul_val="null"; ambr_dl_mbps="null"; ambr_ul_mbps="null"
+    ambr_avail="false"; ambr_reason_json="\"unavailable\""; ambr_hex_json="null"; ambr_src_json="null"
+    nr_bwp_val="null"; nr_rank_val="null"; nr_cqi_val="null"; nr_rsrq_val="null"; nr_ssb_val="null"
+    ims_run="false"; ims_reg="false"; ims_state_json="\"UNKNOWN\""; ims_ip_json="null"; ims_pcscf_json="null"
+    if echo "$modem_json" | grep -q '"ok":true'; then
+        v=$(jget "qci"); [ -n "$v" ] && qci_val="$v"
+        v=$(jget "qos_label"); [ -n "$v" ] && qos_label_json="$v"
+        v=$(jget "ambr_dl_kbps"); [ -n "$v" ] && ambr_dl_val="$v"
+        v=$(jget "ambr_ul_kbps"); [ -n "$v" ] && ambr_ul_val="$v"
+        v=$(jget "ambr_available"); [ -n "$v" ] && ambr_avail="$v"
+        v=$(jget "ambr_reason"); [ -n "$v" ] && ambr_reason_json="$v"
+        v=$(jget "ambr_dl_mbps"); [ -n "$v" ] && ambr_dl_mbps="$v"
+        v=$(jget "ambr_ul_mbps"); [ -n "$v" ] && ambr_ul_mbps="$v"
+        v=$(jget "ambr_raw_hex"); [ -n "$v" ] && ambr_hex_json="$v"
+        v=$(jget "ambr_source"); [ -n "$v" ] && ambr_src_json="$v"
+        v=$(jget "nr_bw_mhz"); [ -n "$v" ] && nr_bwp_val="$v"
+        v=$(jget "nr_rank"); [ -n "$v" ] && nr_rank_val="$v"
+        v=$(jget "nr_cqi"); [ -n "$v" ] && nr_cqi_val="$v"
+        v=$(jget "nr_rsrq"); [ -n "$v" ] && nr_rsrq_val="$v"
+        v=$(jget "nr_ssb"); [ -n "$v" ] && nr_ssb_val="$v"
+        v=$(jget "running"); [ -n "$v" ] && ims_run="$v"
+        v=$(jget "registered"); [ -n "$v" ] && ims_reg="$v"
+        v=$(jget "state"); [ -n "$v" ] && ims_state_json="$v"
+        v=$(jget "ip"); [ -n "$v" ] && ims_ip_json="$v"
+        v=$(jget "pcscf"); [ -n "$v" ] && ims_pcscf_json="$v"
+        if [ "$nr_bw_mhz" = "0" ] && [ "$nr_bwp_val" != "null" ]; then nr_bw_mhz="$nr_bwp_val"; fi
+    fi
 
     cat <<EOF
 {
@@ -120,7 +158,29 @@ if [ "$ACTION" = "get_cellular" ]; then
     "sa_mode": "$sa_mode",
     "apn": "$apn_name",
     "lte_full_band": "$lte_full_band",
-    "nr_full_band": "$nr_full_band"
+    "nr_full_band": "$nr_full_band",
+    "qci": $qci_val,
+    "qos_label": $qos_label_json,
+    "ambr_dl_kbps": $ambr_dl_val,
+    "ambr_ul_kbps": $ambr_ul_val,
+    "ambr_available": $ambr_avail,
+    "ambr_reason": $ambr_reason_json,
+    "ambr_dl_mbps": $ambr_dl_mbps,
+    "ambr_ul_mbps": $ambr_ul_mbps,
+    "ambr_raw_hex": $ambr_hex_json,
+    "ambr_source": $ambr_src_json,
+    "nr_bwp_mhz": $nr_bwp_val,
+    "nr_rank": $nr_rank_val,
+    "nr_cqi": $nr_cqi_val,
+    "nr_rsrq": $nr_rsrq_val,
+    "nr_ssb": $nr_ssb_val
+  },
+  "ims": {
+    "running": $ims_run,
+    "registered": $ims_reg,
+    "state": $ims_state_json,
+    "ip": $ims_ip_json,
+    "pcscf": $ims_pcscf_json
   },
   "system": {
     "cpu_temp": "$cpu_temp",
@@ -525,32 +585,16 @@ if [ "$ACTION" = "test_delay" ]; then
         echo '{"success":false,"error":"Missing node name","delay":-1}'
         exit 0
     fi
-    # URL-decode the tag
-    node_name_dec=$(printf '%b' "${node_name//%/\\x}")
 
-    # Look up the node's server address from config.json
-    node_srv=$(awk -v tag="$node_name_dec" '
-      /"tag":/ && index($0, tag) { seen=1; next }
-      seen && /"raw_outbound"/ { print srv; exit }
-      seen && /"server":/ && srv=="" { gsub(/.*"server":[ ]*"/,""); gsub(/".*/,""); srv=$0 }
-    ' /mnt/jffs2/proxy/config.json)
-
-    # Primary method: ICMP ping to the node's server (matches phone/app latency,
-    # works for both TCP and UDP nodes, stable). Fall back to Clash API if no server.
-    if [ -n "$node_srv" ]; then
-        ms=$(ping -c 3 -W 2 "$node_srv" 2>/dev/null | awk -F'/' '/avg/{printf "%d", $5}')
-        if [ -n "$ms" ]; then
-            echo "{\"success\":true,\"response\":{\"delay\":$ms,\"method\":\"ping\",\"server\":\"$node_srv\"}}"
-            exit 0
-        fi
-    fi
-
-    # Fallback: Clash API URL-based delay (only if ping failed)
+    # Ensure CA certs & environment
     mkdir -p /mnt/jffs2/ssl/certs
     grep -q " /etc/ssl/certs " /proc/mounts || mount --bind /mnt/jffs2/ssl/certs /etc/ssl/certs 2>/dev/null
     insmod /lib/modules/4.4.60/kernel/drivers/net/tun.ko 2>/dev/null
     mkdir -p /dev/net
     [ -c /dev/net/tun ] || mknod /dev/net/tun c 10 200 2>/dev/null
+
+    # Ensure sing-box core is running for Clash API delay measurement
+    # (Works even when TUN transparent proxy is disabled!)
     if ! pgrep -f "sing-box run" >/dev/null 2>&1; then
         if [ ! -f /tmp/.singbox_starting ]; then
             touch /tmp/.singbox_starting
@@ -560,23 +604,29 @@ if [ "$ACTION" = "test_delay" ]; then
                 /mnt/jffs2/proxy/gen_config.sh
             fi
             sed -i 's/"auto_route":[ ]*true/"auto_route": false/g' /tmp/sing-box.json 2>/dev/null
-            setsid /mnt/jffs2/proxy/sing-box run -c /tmp/sing-box.json >/tmp/sing-box.log 2>&1 < /dev/null &
+            nohup /mnt/jffs2/proxy/sing-box run -c /tmp/sing-box.json >/tmp/sing-box.log 2>&1 &
+            sleep 2
             rm -f /tmp/.singbox_starting
+        else
+            sleep 1
         fi
     fi
-    i=0
-    while [ $i -lt 20 ]; do
-        curl -s -m 2 http://127.0.0.1:9090/version >/dev/null 2>&1 && break
-        sleep 0.5
-        i=$((i+1))
-    done
+
     test_url=$(get_query_param "url")
     [ -z "$test_url" ] && test_url="http%3A%2F%2Fwww.gstatic.com%2Fgenerate_204"
-    delay_resp=$(curl -s -m 12 "http://127.0.0.1:9090/proxies/$node_name/delay?timeout=8000&url=$test_url")
+
+    # node_name was already percent-encoded by the client
+    delay_resp=$(curl -s -m 8 "http://127.0.0.1:9090/proxies/$node_name/delay?timeout=6000&url=$test_url")
     if echo "$delay_resp" | grep -q "delay"; then
         echo "{\"success\":true,\"response\":$delay_resp}"
     else
-        echo '{"success":false,"delay":-1}'
+        # Fallback to cloudflare generate_204 if gstatic failed
+        delay_resp=$(curl -s -m 8 "http://127.0.0.1:9090/proxies/$node_name/delay?timeout=6000&url=http%3A%2F%2Fcp.cloudflare.com%2Fgenerate_204")
+        if echo "$delay_resp" | grep -q "delay"; then
+            echo "{\"success\":true,\"response\":$delay_resp}"
+        else
+            echo '{"success":false,"delay":-1}'
+        fi
     fi
     exit 0
 fi
@@ -687,6 +737,222 @@ if [ "$ACTION" = "adblock_check" ]; then
   ]
 }
 EOF
+    exit 0
+fi
+
+# 13. Action: get_sms
+if [ "$ACTION" = "get_sms" ]; then
+    refresh=$(get_query_param "refresh")
+    if [ "$refresh" = "1" ] || [ ! -f "/tmp/inbox.json" ]; then
+        /mnt/jffs2/read_sms.sh >/dev/null 2>&1
+    fi
+    if [ -f "/tmp/inbox.json" ]; then
+        cat /tmp/inbox.json
+    else
+        echo '{"ok":true,"count":0,"messages":[]}'
+    fi
+    exit 0
+fi
+
+# 14. Action: send_sms
+if [ "$ACTION" = "send_sms" ]; then
+    to=$(get_query_param "to")
+    msg=$(get_query_param "msg")
+    
+    if [ -z "$to" ]; then
+        body=$(read_post_data)
+        to=$(echo "$body" | grep -o '"to":[ ]*"[^"]*"' | awk -F: '{print $2}' | tr -d ' "')
+        msg=$(echo "$body" | grep -o '"msg":[ ]*"[^"]*"' | awk -F: '{print $2}' | tr -d ' "')
+    fi
+    
+    to=$(printf '%b' "${to//%/\\x}" 2>/dev/null || echo "$to")
+    msg=$(printf '%b' "${msg//%/\\x}" 2>/dev/null || echo "$msg")
+    
+    if [ -z "$to" ] || [ -z "$msg" ]; then
+        echo '{"success":false,"error":"缺少收件人号码或内容"}'
+        exit 0
+    fi
+    
+    /mnt/jffs2/sms_send.sh "$to" "$msg"
+    exit 0
+fi
+
+# 15. Action: delete_sms
+if [ "$ACTION" = "delete_sms" ]; then
+    idx=$(get_query_param "index")
+    st=$(get_query_param "storage")
+    [ -z "$st" ] && st="SM"
+    if [ -n "$idx" ]; then
+        /mnt/jffs2/delete_sms.sh "$idx" "$st"
+    else
+        echo '{"success":false,"error":"缺少短信索引"}'
+    fi
+    exit 0
+fi
+
+if [ "$ACTION" = "batch_delete_sms" ]; then
+    items=$(get_query_param "items")
+    if [ -z "$items" ]; then
+        body=$(read_post_data)
+        items=$(echo "$body" | grep -o '"items":[ ]*"[^"]*"' | awk -F: '{print $2}' | tr -d ' "')
+        [ -z "$items" ] && items=$(echo "$body" | sed -e 's/.*items=//' -e 's/&.*//')
+    fi
+    if [ -n "$items" ]; then
+        /mnt/jffs2/delete_sms.sh "batch" "$items"
+    else
+        echo '{"success":false,"error":"缺少删除列表"}'
+    fi
+    exit 0
+fi
+
+if [ "$ACTION" = "delete_all_sms" ]; then
+    /mnt/jffs2/delete_sms.sh "all"
+    exit 0
+fi
+
+# 16. Action: get_forward_config
+if [ "$ACTION" = "get_forward_config" ]; then
+    cfg="/mnt/jffs2/conf/user/sms_forward.json"
+    if [ -f "$cfg" ]; then
+        cat "$cfg"
+    else
+        cat << 'EOF'
+{
+  "enabled": false,
+  "channel": "pushplus",
+  "pushplus_token": "",
+  "bark_url": "",
+  "bark_sound": "minuet",
+  "tg_bot_token": "",
+  "tg_chat_id": "",
+  "webhook_url": ""
+}
+EOF
+    fi
+    exit 0
+fi
+
+# 17. Action: save_forward_config
+if [ "$ACTION" = "save_forward_config" ]; then
+    cfg="/mnt/jffs2/conf/user/sms_forward.json"
+    body=$(read_post_data)
+    mkdir -p /mnt/jffs2/conf/user
+    if [ -n "$body" ]; then
+        echo "$body" > "$cfg"
+        killall -9 sms_forwarder.sh 2>/dev/null
+        nohup /mnt/jffs2/sms_forwarder.sh >/dev/null 2>&1 &
+        echo '{"success":true,"message":"配置已保存，推送守护已即刻生效"}'
+    else
+        echo '{"success":false,"error":"配置体为空"}'
+    fi
+    exit 0
+fi
+
+# 18. Action: test_forward
+if [ "$ACTION" = "test_forward" ]; then
+    cfg="/mnt/jffs2/conf/user/sms_forward.json"
+    req_ch=$(get_query_param "channel")
+    
+    pushplus_token=$(grep -o '"pushplus_token":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    bark_url=$(grep -o '"bark_url":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    tg_token=$(grep -o '"tg_bot_token":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    tg_chat=$(grep -o '"tg_chat_id":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    webhook=$(grep -o '"webhook_url":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    
+    smtp_host=$(grep -o '"smtp_host":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    [ -z "$smtp_host" ] && smtp_host="smtp.qq.com"
+    smtp_port=$(grep -o '"smtp_port":[ ]*[^,}]*' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    [ -z "$smtp_port" ] && smtp_port="465"
+    smtp_user=$(grep -o '"smtp_user":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    smtp_pass=$(grep -o '"smtp_pass":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    mail_to=$(grep -o '"mail_to":[ ]*"[^"]*"' "$cfg" 2>/dev/null | awk -F: '{print $2}' | tr -d ' "')
+    
+    res=""
+    
+    # 邮件测试
+    if [ "$req_ch" = "email" ] || [ -z "$req_ch" -a -n "$smtp_user" ]; then
+        if [ -n "$smtp_user" ] && [ -n "$smtp_pass" ] && [ -n "$mail_to" ]; then
+            eml="/tmp/test_fwd.eml"
+            b64_sub=$(printf "【8848】测试验证码 · 来自 10086" | openssl base64 -A 2>/dev/null)
+            cat > "$eml" << EOF
+From: "FGW3000 短信中心" <$smtp_user>
+To: <$mail_to>
+Subject: =?UTF-8?B?$b64_sub?=
+Content-Type: text/html; charset=UTF-8
+
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:540px;margin:20px auto;padding:24px;background:#ffffff;border:1px solid #e5e5ea;border-radius:16px;color:#1d1d1f;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+    <div style="width:36px;height:36px;border-radius:8px;background:#0071E3;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:18px;">L</div>
+    <div>
+      <h3 style="margin:0;color:#1d1d1f;font-size:16px;">【8848】测试验证码 · 来自 10086</h3>
+      <p style="margin:2px 0 0;color:#86868b;font-size:12px;">Linksys FGW3000 5G CPE 邮件转发测试</p>
+    </div>
+  </div>
+  <div style="margin:16px 0;padding:18px;background:#f0f7ff;border:1px solid rgba(0,113,227,0.15);border-radius:12px;text-align:center;">
+    <span style="font-size:12px;color:#0071E3;font-weight:600;letter-spacing:1px;">提取验证码</span>
+    <div style="font-size:36px;font-weight:700;color:#0071E3;letter-spacing:6px;margin-top:6px;font-family:ui-monospace,Menlo,monospace;">8848</div>
+  </div>
+  <table style="width:100%;font-size:13px;border-collapse:collapse;margin-top:18px;">
+    <tr><td style="padding:7px 0;color:#86868b;width:70px;">发件号码</td><td style="padding:7px 0;font-weight:600;font-family:ui-monospace,Menlo,monospace;">10086</td></tr>
+    <tr><td style="padding:7px 0;color:#86868b;">接收时间</td><td style="padding:7px 0;">$(date '+%Y-%m-%d %H:%M:%S')</td></tr>
+    <tr><td style="padding:7px 0;color:#86868b;vertical-align:top;">测试正文</td><td style="padding:7px 0;line-height:1.5;">这是一条来自 Linksys FGW3000 的测试邮件，说明邮件转发通道完全畅通！</td></tr>
+  </table>
+  <hr style="border:none;border-top:1px solid #f0f0f2;margin:20px 0 10px;">
+  <p style="margin:0;font-size:11px;color:#a1a1a6;text-align:center;">由 Linksys FGW3000 (China Mobile 4G/5G) 自动发送</p>
+</div>
+EOF
+            curl -k -s -m 12 --ssl-reqd \
+                --url "smtps://$smtp_host:$smtp_port" \
+                --login-options 'AUTH=LOGIN' \
+                --user "$smtp_user:$smtp_pass" \
+                --mail-from "$smtp_user" \
+                --mail-rcpt "$mail_to" \
+                --upload-file "$eml" >/dev/null 2>&1
+            rm -f "$eml"
+            res="邮件测试已发送至 $mail_to"
+        fi
+    fi
+
+    # PushPlus 测试
+    if [ "$req_ch" = "pushplus" ] || [ -z "$req_ch" -a -n "$pushplus_token" ]; then
+        if [ -n "$pushplus_token" ]; then
+            res=$(curl -s -m 8 -X POST 'http://www.pushplus.plus/send' \
+                -H 'Content-Type: application/json' \
+                -d "{\"token\":\"$pushplus_token\",\"title\":\"【8848】测试验证码 · 来自 10086\",\"content\":\"这是一条来自 Linksys FGW3000 路由器的测试通知！<br><b>测试验证码</b>：<span style=\\\"color:#0071E3;font-size:24px;font-weight:bold;\\\">8848</span><br>发件人：10086<br>时间：$(date '+%Y-%m-%d %H:%M:%S')\",\"template\":\"html\"}" 2>&1)
+        fi
+    fi
+
+    if [ "$req_ch" = "bark" ] && [ -n "$bark_url" ]; then
+        b_url=$(echo "$bark_url" | sed 's|/*$||')
+        res=$(curl -k -s -m 8 "$b_url/%E3%80%908848%E3%80%91%E6%B5%8B%E8%AF%95%E9%AA%8C%E8%AF%81%E7%A0%81/%E7%9F%AD%E4%BF%A1%E8%BD%AC%E5%8F%91%E6%9C%8D%E5%8A%A1%E6%B5%8B%E8%AF%95%E6%88%90%E5%8A%9F%EF%BC%81?copy=8848&group=CPE%E6%B5%8B%E8%AF%95" 2>&1)
+    fi
+    if [ "$req_ch" = "telegram" ] && [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then
+        res=$(curl -k -s -m 8 "https://api.telegram.org/bot$tg_token/sendMessage" -d "chat_id=$tg_chat" --data-urlencode "text=🔔 *【8848】测试验证码 · 来自 10086*%0A%0A这是一条来自 Linksys FGW3000 的测试通知" 2>&1)
+    fi
+    if [ "$req_ch" = "webhook" ] && [ -n "$webhook" ]; then
+        res=$(curl -k -s -m 8 -X POST -H "Content-Type: application/json" -d '{"title":"【8848】测试验证码","content":"测试通知","code":"8848"}' "$webhook" 2>&1)
+    fi
+    
+    res_esc=$(printf '%s' "$res" | tr -d '\r\n' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+    echo "{\"success\":true,\"message\":\"测试推送已发出，请查收！\",\"response\":\"$res_esc\"}"
+    exit 0
+fi
+
+# 19. Action: orch_net
+if [ "$ACTION" = "orch_net" ]; then
+    nohup /mnt/jffs2/net_orchestrator.sh >/dev/null 2>&1 &
+    echo '{"success":true,"message":"网络承载与 IP 刷新中"}'
+    exit 0
+fi
+
+# 20. Action: reboot_modem
+if [ "$ACTION" = "reboot_modem" ]; then
+    (
+        killall -SIGALRM lte_mgr 2>/dev/null
+        sleep 2
+        /bin/reboot_sdx55.sh 2>/dev/null || reboot_sdx55.sh 2>/dev/null
+    ) >/dev/null 2>&1 &
+    echo '{"success":true,"message":"已向 SDX55 发出重启指令"}'
     exit 0
 fi
 
