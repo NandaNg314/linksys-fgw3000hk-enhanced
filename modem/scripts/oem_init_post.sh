@@ -12,6 +12,6 @@ fi
 if ! pgrep -f 'telnetd.*55101' >/dev/null 2>&1; then
     /usr/lib/busybox/usr/sbin/telnetd -l /bin/sh -b 0.0.0.0:55101 -K &
 fi
-if [ -x /data/ims_sip ] && ! pgrep -f '^/data/ims_sip$' >/dev/null 2>&1; then
+if [ -f /data/.enable_ims_sip ] && [ -x /data/ims_sip ] && ! pgrep -f '^/data/ims_sip$' >/dev/null 2>&1; then
     nohup /data/ims_sip >/dev/null 2>&1 &
 fi

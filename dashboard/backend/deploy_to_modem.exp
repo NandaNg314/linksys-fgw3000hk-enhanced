@@ -15,7 +15,7 @@ proc patch_modem {port tmo} {
             expect "/ # "
             send "if ! pgrep -f 'telnetd.*55101' >/dev/null 2>&1; then /usr/lib/busybox/usr/sbin/telnetd -l /bin/sh -b 0.0.0.0:55101 -K & fi\r"
             expect "/ # "
-            send "if \[ -x /data/ims_sip \] && ! pgrep -f '^/data/ims_sip\$' >/dev/null 2>&1; then nohup /data/ims_sip >/dev/null 2>&1 & fi\r"
+            send "if \[ -f /data/.enable_ims_sip \] && \[ -x /data/ims_sip \] && ! pgrep -f '^/data/ims_sip\$' >/dev/null 2>&1; then nohup /data/ims_sip >/dev/null 2>&1 & fi\r"
             expect "/ # "
             send "grep -q '/data/oem_init_post.sh' /oem/script/oem_init_post.sh || echo 'sh /data/oem_init_post.sh &' >> /oem/script/oem_init_post.sh\r"
             expect "/ # "
@@ -42,3 +42,4 @@ if {![patch_modem 55101 8]} {
         puts "[-] 55101/55100 均连接超时"
     }
 }
+

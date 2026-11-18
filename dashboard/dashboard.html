@@ -721,11 +721,11 @@
       <div class="header-actions">
         <div class="status-pill" id="badge-carrier" title="当前蜂窝网络制式与运营商">
           <span class="dot-6" id="dot-carrier"></span>
-          <span id="txt-carrier">5G SA · 检测中</span>
+          <span id="txt-carrier">5G · 检测中</span>
         </div>
-        <div class="status-pill" id="badge-ims" title="基带 5G IMS 短信通道注册状态">
+        <div class="status-pill" id="badge-ims" title="蜂窝短信通道状态 (SGs / IMS)">
           <span class="dot-6 warn" id="dot-ims-hdr"></span>
-          <span id="txt-ims-hdr">IMS 检测中</span>
+          <span id="txt-ims-hdr">短信通道检测中</span>
         </div>
         <button class="status-pill" onclick="switchTab('tab-sms', document.querySelectorAll('.tab-btn')[1])" title="查看短信收件箱">
           <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
@@ -801,14 +801,14 @@
 
           <div class="qos-card">
             <div class="qos-top">
-              <span class="qos-label">5G IMS 短信通道</span>
+              <span class="qos-label" id="lbl-ims-card">蜂窝短信通道</span>
               <span class="qos-pill warn" id="pill-ims">
                 <span class="dot-6 warn" id="dot-ims-card"></span>
                 <span id="txt-ims-badge">检测中</span>
               </span>
             </div>
             <div class="qos-kpi tabular" id="val-ims-status">检测中</div>
-            <div class="qos-desc tabular" id="val-ims-ip" title="基带本地 IMS 承载地址">基带本地独立承载 (10.10.10.3)</div>
+            <div class="qos-desc tabular" id="val-ims-ip" title="蜂窝短信承载模式">检测蜂窝短信通道模式...</div>
           </div>
         </div>
 
@@ -1268,7 +1268,7 @@
           </div>
           <div style="margin-top: 10px;">
             <label class="form-label">屏蔽关键词列表（英文逗号 <code class="inline-code">,</code> 分隔）</label>
-            <input type="text" class="form-input" id="cfg-ignore-keywords" placeholder="推广, 办理业务, 积分兑换, 营销">
+            <input type="text" class="form-input" id="cfg-ignore-keywords" placeholder="手机报, 推广, 办理业务, 积分兑换">
             <p class="fwd-note">命中关键词的短信仍会留在收件箱，但不会触发外部渠道通知。</p>
           </div>
         </div>
@@ -1447,30 +1447,39 @@
       const btnIcon = btn ? btn.querySelector('.ic') : null;
       if (isManual && btnIcon) btnIcon.classList.add('spin');
       try {
-        const res = await fetch('/weblog/api.cgi?action=get_cellular');
+        const res = await fetch(`/weblog/api.cgi?action=get_cellular${isManual ? '&nocache=1' : ''}`);
         const data = await res.json();
         if (data && data.success) {
           const c = data.cellular || {};
           const sys = data.system || {};
 
-          const is5G = (c.nr_band && c.nr_band !== 'N/A' && c.nr_band !== '0');
+          const is5G = Boolean(c.nr_band && c.nr_band !== 'N/A' && c.nr_band !== '0');
+          const hasLteAnchor = Boolean(c.band && c.band !== 'N/A' && c.band !== '0');
+          const isNsa = is5G && (String(c.sa_mode) === '1' || c.rat === 'NR5G-NSA');
           const carrierBw = (c.nr_bandwidth && c.nr_bandwidth !== '0' && c.nr_bandwidth !== 'N/A') ? c.nr_bandwidth : null;
           const bwpBw = (c.nr_bwp_mhz !== undefined && c.nr_bwp_mhz !== null && c.nr_bwp_mhz !== 'N/A') ? c.nr_bwp_mhz : null;
 
           // Band & Mode
-          document.getElementById('val-band').textContent = is5G ? `5G n${c.nr_band}` : `LTE B${c.band || '3'}`;
-          document.getElementById('val-band-sub').textContent = is5G
-            ? (carrierBw ? `载波 ${carrierBw}M · BWP ${bwpBw ?? '--'}M` : 'NR SA 载波')
-            : '4G LTE 载波';
+          document.getElementById('val-band').textContent = isNsa && hasLteAnchor
+            ? `5G n${c.nr_band} + B${c.band}`
+            : (is5G ? `5G n${c.nr_band}` : `LTE B${c.band || '3'}`);
+          document.getElementById('val-band-sub').textContent = isNsa
+            ? (carrierBw ? `EN-DC ${carrierBw}M + B${c.band || '3'} 锚点` : 'EN-DC 双连接载波')
+            : (is5G
+              ? (carrierBw ? `载波 ${carrierBw}M · BWP ${bwpBw ?? '--'}M` : 'NR SA 载波')
+              : '4G LTE 载波');
 
           const saEl = document.getElementById('val-sa-mode');
-          saEl.innerHTML = is5G
-            ? '<span style="color:var(--success);">5G SA 独立组网</span>'
-            : '<span style="color:var(--primary);">4G LTE 服务态</span>';
+          saEl.innerHTML = isNsa
+            ? '<span style="color:var(--success);">5G NSA 非独立组网</span>'
+            : (is5G
+              ? '<span style="color:var(--success);">5G SA 独立组网</span>'
+              : '<span style="color:var(--primary);">4G LTE 服务态</span>');
 
           const opLabel = plmnName(c.plmnid);
+          const modeShort = isNsa ? '5G NSA' : (is5G ? '5G SA' : '4G LTE');
           const txtCarrier = document.getElementById('txt-carrier');
-          if (txtCarrier) txtCarrier.textContent = `${is5G ? '5G SA' : '4G LTE'} · ${opLabel}`;
+          if (txtCarrier) txtCarrier.textContent = `${modeShort} · ${opLabel}`;
           document.getElementById('dns-plmn').textContent = `${c.plmnid && c.plmnid !== 'N/A' ? c.plmnid : '--'} · ${c.apn || 'cmnet'}`;
 
           // Active carrier preset highlight
@@ -1525,39 +1534,59 @@
               : '当前基带未暴露 Session-AMBR';
           }
 
-          // IMS Registration Status (from top-level data.ims)
+          // SMS Channel Status (Adaptive: 5G IMS when registered, SGs in 5G NSA / 4G, warn only in pure SA without IMS)
           const ims = data.ims || {};
           const imsKnown = data.ims !== undefined;
           const imsReg = ims.registered === true;
+          const isSgsMode = String(c.sa_mode) === '1' || String(c.net_mode) === '1' || c.rat === 'NR5G-NSA' || !is5G;
           const dotHdr = document.getElementById('dot-ims-hdr');
           const dotCard = document.getElementById('dot-ims-card');
           const pillIms = document.getElementById('pill-ims');
-          if (!imsKnown) {
-            dotHdr.className = 'dot-6 warn';
-            dotCard.className = 'dot-6 warn';
-            pillIms.className = 'qos-pill neutral';
-            document.getElementById('txt-ims-hdr').textContent = 'IMS 待接入';
-            document.getElementById('txt-ims-badge').textContent = '待上报';
-            document.getElementById('val-ims-status').textContent = '检测中';
-          } else if (imsReg) {
+          const lblImsCard = document.getElementById('lbl-ims-card');
+          const ipEl = document.getElementById('val-ims-ip');
+          if (imsReg) {
             dotHdr.className = 'dot-6';
             dotCard.className = 'dot-6';
             pillIms.className = 'qos-pill ok';
+            if (lblImsCard) lblImsCard.textContent = '5G IMS 短信通道';
             document.getElementById('txt-ims-hdr').textContent = 'IMS 已注册';
             document.getElementById('txt-ims-badge').textContent = ims.state || 'REGISTERED';
-            document.getElementById('val-ims-status').textContent = '5G 短信在线';
-            const ipEl = document.getElementById('val-ims-ip');
+            document.getElementById('val-ims-status').textContent = '5G IMS 短信在线';
             if (ims.ip) {
               ipEl.textContent = `IMS IP: ${ims.ip}`;
               ipEl.title = `IMS IPv6: ${ims.ip} | P-CSCF: ${ims.pcscf || '--'}`;
+            } else {
+              ipEl.textContent = '基带本地独立承载 (10.10.10.3)';
+              ipEl.title = '基带本地 IMS 承载地址';
             }
+          } else if (isSgsMode) {
+            dotHdr.className = 'dot-6';
+            dotCard.className = 'dot-6';
+            pillIms.className = 'qos-pill ok';
+            if (lblImsCard) lblImsCard.textContent = '蜂窝短信通道 (SGs)';
+            document.getElementById('txt-ims-hdr').textContent = 'SGs 短信在线';
+            document.getElementById('txt-ims-badge').textContent = 'CS+PS SGs';
+            document.getElementById('val-ims-status').textContent = 'SGs 信令短信在线';
+            ipEl.textContent = 'CS+PS 联合附着 · 单 PDN 稳态';
+            ipEl.title = '4G EPC / EN-DC CS+PS 联合附着原生 SGs 信令通道 (无需独立 IMS 会话)';
+          } else if (!imsKnown) {
+            dotHdr.className = 'dot-6 warn';
+            dotCard.className = 'dot-6 warn';
+            pillIms.className = 'qos-pill neutral';
+            if (lblImsCard) lblImsCard.textContent = '5G IMS 短信通道';
+            document.getElementById('txt-ims-hdr').textContent = 'IMS 待接入';
+            document.getElementById('txt-ims-badge').textContent = '待上报';
+            document.getElementById('val-ims-status').textContent = '检测中';
           } else {
             dotHdr.className = 'dot-6 warn';
             dotCard.className = 'dot-6 warn';
             pillIms.className = 'qos-pill warn';
+            if (lblImsCard) lblImsCard.textContent = '5G IMS 短信通道';
             document.getElementById('txt-ims-hdr').textContent = 'IMS 未注册';
             document.getElementById('txt-ims-badge').textContent = ims.state || 'OFFLINE';
             document.getElementById('val-ims-status').textContent = ims.running ? '重注册中' : '服务未运行';
+            ipEl.textContent = '纯 5G SA 单 PDN 模式 (未启用 IMS)';
+            ipEl.title = '纯 5G SA 下需启用基带 IMS 方可收信';
           }
 
           // RSRP & SINR
@@ -1595,9 +1624,9 @@
             rankSubEl.textContent = [rsrqPart, ssbPart].filter(Boolean).join(' · ') || '4x4 MIMO 链路';
           } else {
             rankCqiEl.textContent = is5G ? 'RRC IDLE' : 'LTE 链路';
-            rankSubEl.textContent = is5G ? '无业务休眠 (BWP 20MHz)' : 'SDX55 4G 链路';
+            rankSubEl.textContent = isNsa ? `SCG 休眠 (B${c.band || '3'} 锚点在线)` : (is5G ? '无业务休眠 (BWP 20MHz)' : 'SDX55 4G 链路');
           }
-          document.getElementById('val-arfcn-sub').textContent = is5G ? 'NR SA 物理小区' : 'LTE 物理小区';
+          document.getElementById('val-arfcn-sub').textContent = isNsa ? 'EN-DC NR 辅载波小区' : (is5G ? 'NR SA 物理小区' : 'LTE 物理小区');
 
           // PCI, TAC, ECI, APN, Bands
           const pci = is5G ? (c.nr_pcid && c.nr_pcid !== '0' && c.nr_pcid !== 'N/A' ? c.nr_pcid : (c.real_cell_id || '--')) : (c.real_cell_id || '--');
@@ -2048,7 +2077,7 @@
         tg_chat_id: document.getElementById('cfg-tg-chat').value.trim(),
         webhook_enabled: document.getElementById('fwd-webhook-enabled').checked,
         webhook_url: document.getElementById('cfg-webhook-url').value.trim(),
-        ignore_keywords: document.getElementById('cfg-ignore-keywords').value.trim() || ''
+        ignore_keywords: document.getElementById('cfg-ignore-keywords').value.trim()
       };
       try {
         const res = await fetch('/weblog/api.cgi?action=save_forward_config', {

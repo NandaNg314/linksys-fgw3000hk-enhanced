@@ -2,10 +2,8 @@
 use strict;
 use warnings;
 use Fcntl qw(:flock);
+use Socket;
 
-# Serialize all AT operations on /dev/smd7 with /data/del_sms.sh
-open(my $lock_fh, ">", "/tmp/.sms_at.lock") or die "Cannot open lock";
-flock($lock_fh, LOCK_EX);
 
 sub swap_nibbles {
     my ($hex) = @_;
@@ -242,6 +240,83 @@ sub at {
     $o =~ s/\r//g if defined $o;
     return $o || "";
 }
+
+sub write_inbox_if_changed {
+    my ($json) = @_;
+    my $old = "";
+    if (open(my $rfh, "<", "/data/inbox.json")) {
+        local $/;
+        $old = <$rfh> // "";
+        close($rfh);
+    }
+    return if $old eq $json;
+    my $tmp = "/data/inbox.json.tmp.$$";
+    if (open(my $fh, ">", $tmp)) {
+        print $fh $json;
+        close($fh);
+        rename($tmp, "/data/inbox.json");
+    }
+}
+
+sub qmi_wms_is_empty {
+    my $ql = `qrtr-lookup 2>/dev/null`;
+    my ($wn, $wp);
+    for my $line (split /\n/, ($ql // "")) {
+        my @f = split /\s+/, $line;
+        shift @f while @f && $f[0] eq "";
+        if (@f >= 5 && $f[0] eq "5" && $f[3] =~ /^\d+$/ && $f[4] =~ /^\d+$/) {
+            ($wn, $wp) = (int($f[3]), int($f[4]));
+            last;
+        }
+    }
+    return 0 unless defined $wn;
+    socket(my $sock, 42, SOCK_DGRAM, 0) or return 0;
+    my $sa = pack("S S L L", 42, 0, $wn, $wp);
+    my $tx = 1;
+    my $total = 0;
+    for my $st (0, 1) {
+        my $tlv = pack("C S C", 0x01, 1, $st) . pack("C S C", 0x11, 1, 0x01);
+        my $pkt = pack("C S S S", 0x00, $tx++, 0x0031, length($tlv)) . $tlv;
+        send($sock, $pkt, 0, $sa) or do { close($sock); return 0; };
+        my $rin = "";
+        vec($rin, fileno($sock), 1) = 1;
+        if (select($rin, undef, undef, 0.5) <= 0) { close($sock); return 0; }
+        my $buf = "";
+        recv($sock, $buf, 4096, 0);
+        if (length($buf) < 7) { close($sock); return 0; }
+        my $pos = 7;
+        my ($ok_res, $cnt) = (0, undef);
+        while ($pos + 3 <= length($buf)) {
+            my ($t, $l) = unpack("C S", substr($buf, $pos, 3));
+            $pos += 3;
+            last if $pos + $l > length($buf);
+            my $v = substr($buf, $pos, $l);
+            $pos += $l;
+            if ($t == 0x02 && $l == 4) {
+                my ($res, $err) = unpack("S S", $v);
+                $ok_res = ($res == 0) ? 1 : 0;
+            } elsif ($t == 0x01 && $l == 4) {
+                $cnt = unpack("V", $v);
+            }
+        }
+        if (!$ok_res || !defined($cnt)) { close($sock); return 0; }
+        $total += $cnt;
+    }
+    close($sock);
+    return ($total == 0) ? 1 : 0;
+}
+
+if (qmi_wms_is_empty()) {
+    my @ims_items = load_ims_json_items();
+    my $json = "{\"ok\":true,\"count\":" . scalar(@ims_items) . ",\"next_index\":0,\"messages\":[" . join(",", @ims_items) . "]}\n";
+    print $json;
+    write_inbox_if_changed($json);
+    exit 0;
+}
+
+# Serialize fallback AT operations on /dev/smd7 with /data/del_sms.sh
+open(my $lock_fh, ">", "/tmp/.sms_at.lock") or die "Cannot open lock";
+flock($lock_fh, LOCK_EX);
 
 # 1. 快速检查存储槽位状态 (轻量级探测，保护串口)
 my $cpms_stat = at("AT+CPMS?");

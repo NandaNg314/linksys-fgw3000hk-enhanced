@@ -2,10 +2,19 @@
 # ==============================================================================
 ip link set dev rmnet_mhi_sw0 arp off up 2>/dev/null; ip addr add 10.10.10.7 peer 10.10.10.3/32 dev rmnet_mhi_sw0 2>/dev/null; ip route replace 10.10.10.3 dev rmnet_mhi_sw0 proto kernel scope link src 10.10.10.7 2>/dev/null; ip addr add 192.168.254.7 peer 192.168.254.3/32 dev rmnet_mhi_sw0 2>/dev/null; ip route replace 192.168.254.3 dev rmnet_mhi_sw0 proto kernel scope link src 192.168.254.7 2>/dev/null; ip link set dev rmnet_mhi0 up 2>/dev/null; ip link set dev rmnet_data0 up 2>/dev/null
 grep -q " /sbin/reboot " /proc/mounts || mount --bind /mnt/jffs2/block_reboot.sh /sbin/reboot 2>/dev/null
-grep -q " /bin/lte_mgr " /proc/mounts || mount --bind /mnt/jffs2/lte_mgr_csps /bin/lte_mgr 2>/dev/null
+if ! grep -q " /bin/lte_mgr " /proc/mounts; then
+    if mount --bind /mnt/jffs2/lte_mgr_csps /bin/lte_mgr 2>/dev/null; then
+        killall -TERM lte_mgr 2>/dev/null
+        sleep 1
+        LPID=$(pidof lte_mgr 2>/dev/null)
+        if [ -n "$LPID" ] && grep -q " 1f:" "/proc/$LPID/maps" 2>/dev/null; then
+            kill -9 "$LPID" 2>/dev/null
+        fi
+    fi
+fi
 grep -q " /bin/reboot_sdx55.sh " /proc/mounts || mount --bind /mnt/jffs2/no_reboot_sdx55.sh /bin/reboot_sdx55.sh 2>/dev/null
 
-# === qnicorn KFC 关闭（kfc_mode=0 kfc_qmap=0）：让 QMAP 退回标准格式，避免 5G SA 下行被丢 ===
+# === qnicorn KFC 关闭（kfc_mode=0 kfc_qmap=0）：让 QMAP 退回标准格式，避免 5G 下行被丢 ===
 grep -q " /etc/data/qnicorn_config.xml " /proc/mounts 2>/dev/null || mount --bind /mnt/jffs2/qnicorn_config.xml /etc/data/qnicorn_config.xml 2>/dev/null
 
 # === lte_mgr 异常告警检测（只记告警不永久 SIGSTOP，避免断网后无法自愈） ===
@@ -13,11 +22,13 @@ if [ ! -f /tmp/.lte_freeze_done ]; then
     (
         for W in 12 30 50; do
             sleep $W 2>/dev/null || sleep 12
-            ERRS=$(grep -c "QCM_DMS_SERVICE_ERR" /tmp/lte_mgr/LCMServer.log 2>/dev/null || echo 0)
-            R12=$(dmesg 2>/dev/null | grep -c "qrtr_sendmsg.*-12")
+            ERRS=$(grep -c "QCM_DMS_SERVICE_ERR" /tmp/lte_mgr/LCMServer.log 2>/dev/null || true)
+            case "$ERRS" in ''|*[!0-9]*) ERRS=0 ;; esac
+            R12=$(dmesg 2>/dev/null | grep -cE "qrtr_sendmsg.*-(110|12)" || true)
+            case "$R12" in ''|*[!0-9]*) R12=0 ;; esac
             if [ "$ERRS" -gt 5 ] || [ "$R12" -gt 3 ]; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [WARN] t=$W errs=$ERRS qrtr-12=$R12 (no SIGSTOP)" >> /tmp/lte_freeze.log
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LTE_MGR_WARN] t=$W errs=$ERRS qrtr-12=$R12" >> /mnt/jffs2/wan_events.log
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [WARN] t=$W errs=$ERRS qrtr=$R12 (no SIGSTOP)" >> /tmp/lte_freeze.log
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LTE_MGR_WARN] t=$W errs=$ERRS qrtr=$R12" >> /mnt/jffs2/wan_events.log
                 break
             fi
         done
@@ -101,12 +112,7 @@ if ! pgrep -f "crond.*conf/app" >/dev/null 2>&1; then
     crond -c "$CRON_DIR" 2>/dev/null
 fi
 
-# 1.5 确保 5G SA 模式永不被降级关闭（只修正配置并记录，不发 SIGALRM lte_mgr）
-if [ "$(cmscfg -gn threeG_network_sa_mode 2>/dev/null | cut -d= -f2)" = "1" ]; then
-    cmscfg -sn threeG_network_sa_mode -v 0 2>/dev/null
-    cmscfg -w /mnt/jffs2/conf/user/multimode.conf 2>/dev/null
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SA_GUARD] Reset threeG_network_sa_mode=0 (no SIGALRM)" >> /mnt/jffs2/wan_events.log
-fi
+# 1.5 尊重 multimode.conf 持久化的 5G NSA (sa_mode=1) 或 5G SA (sa_mode=0) 选择，不再强行覆盖
 
 # 2. 根证书持久化挂载
 mkdir -p /mnt/jffs2/ssl/certs
@@ -327,10 +333,11 @@ if [ -x /mnt/jffs2/sms_forwarder.sh ]; then
     fi
 fi
 
-# 15. 5G IMS SMS receiver daemon (runs locally on modem 10.10.10.3)
+# 15. 5G IMS SMS receiver daemon (opt-in ONLY; disabled by default in 5G NSA / single-PDN mode)
 for p in $(pgrep -f "^/mnt/jffs2/ims_sip" 2>/dev/null); do
     kill "$p" 2>/dev/null
 done
-if ping -c 1 -W 1 10.10.10.3 >/dev/null 2>&1; then
+if [ -f /mnt/jffs2/conf/user/.enable_ims_sip ] && ping -c 1 -W 1 10.10.10.3 >/dev/null 2>&1; then
     wget -qO- -T 4 "http://10.10.10.3:55102/cgi-bin/ims_sip_ctl?action=ensure" >/dev/null 2>&1 &
 fi
+

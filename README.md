@@ -3,15 +3,15 @@
 > **⚠️ 本项目的 HTML/脚本/刷机包均为 Linksys FGW3000-HK 专用，其他型号（如 FGW3000 / 非 HK 版）不适用！**
 >
 > 为 **Linksys FGW3000-HK**（高通 IPQ8074A + 骁龙 SDX55 5G CPE，香港版）打造的
-> **调试权限开启 + 5G SA 频段解锁 + 基带本地 5G IMS 短信 + 极客 Web 控制台** 开源项目。
-> 支持四大运营商 5G SA 收敛锁频、QMI 5QI / 3GPP 5GSM 签约速率检测、5G 短信实时收发与多渠道推送、WAN 双栈自愈守护、SmartDNS 加速及可选透明代理。
+> **调试权限开启 + 5G NSA/SA 频段解锁 + SGs / IMS 双栈短信 + 极客 Web 控制台** 开源项目。
+> 支持四大运营商 5G NSA (EN-DC) / SA 收敛锁频、QMI 5QI / 3GPP 5GSM 签约速率检测、原生 SGs 与可选 5G IMS 短信实时收发及多渠道推送、WAN 双栈自愈守护、SmartDNS 加速及可选透明代理。
 
 **English** | [中文](#中文文档)
 
 > **⚠️ HTML / scripts / config pack are for Linksys FGW3000-HK (HK version) ONLY.**
 
 An open-source enhancement suite for the **Linksys FGW3000-HK** 5G CPE:
-**unlock Telnet/SSH** + **enable CN 5G SA (n41/n28/n78/n79)** + **modem-local QRTR 5G IMS SMS** + **QMI 5QI & 3GPP 5GSM Session-AMBR telemetry** + **Apple HIG web dashboard** (WAN dual-stack self-healing, SmartDNS + Anti-AD, multi-channel SMS forwarding, and optional Sing-box transparent proxy).
+**unlock Telnet/SSH** + **enable CN 5G NSA/SA (n41/n28/n78/n79)** + **native CS+PS SGs SMS & QMI WMS zero-AT polling (plus opt-in modem QRTR 5G IMS SMS)** + **QMI 5QI & 3GPP 5GSM Session-AMBR telemetry** + **Apple HIG web dashboard** (WAN dual-stack self-healing, 2-min MHI `-110/-12` watchdog, SmartDNS + Anti-AD, multi-channel SMS forwarding, and optional Sing-box transparent proxy).
 
 ### 界面预览 / Screenshots
 
@@ -19,7 +19,7 @@ An open-source enhancement suite for the **Linksys FGW3000-HK** 5G CPE:
 | :---: | :---: |
 | ![蜂窝与 QoS 监控（浅色）](docs/images/dashboard-light-cell.png) | ![蜂窝与 QoS 监控（深色）](docs/images/dashboard-dark-cell.png) |
 
-| 5G IMS 短信收发工作台 | 多渠道短信实时推送 |
+| 蜂窝短信收发工作台 | 多渠道短信实时推送 |
 | :---: | :---: |
 | ![短信收发工作台](docs/images/dashboard-light-sms.png) | ![多渠道实时推送](docs/images/dashboard-light-forward.png) |
 
@@ -40,10 +40,10 @@ An open-source enhancement suite for the **Linksys FGW3000-HK** 5G CPE:
 | 原厂状态（痛点） | 本项目之后（你能做的） |
 | --- | --- |
 | 没有 Telnet/SSH，进不去系统，什么都改不了 | **永久开启 Telnet/SSH（仅限 LAN `br0` 内网访问）**，安全可控 |
-| **原厂固件默认未开启 5G SA**，隐藏国内移动 `n41` 等主力频段 | **开启 5G SA 并解锁国内四大运营商频段（移动/广电 `n41/n28/n79`、电信/联通 `n78/n1`）** |
-| 5G 模式下无法收发短信验证码，多 PDN 拨号导致硬件加速失效 | **基带本地 QRTR 5G IMS 短信守护（`ims_sip`）**，单 PDN 满速与 5G 实时收信兼得 |
+| **原厂固件默认未开启国内 5G 主力频段**，隐藏移动 `n41` 等载波 | **完整解锁四大运营商 5G NSA/SA 频段（移动/广电 `n41/n28/n79`、电信/联通 `n78/n1`）** |
+| 原厂锁死纯数据域（`PS_ONLY`）无法收短信，且 5G SA 双 PDU 会话易触发基带 `-110` 假死 | **5G NSA (`EN-DC` 120MHz) + `CS+PS` 原生 SGs 短信 + QMI WMS 零阻塞预检**（单 PDN 硬件加速满速与 7×24 零死机兼得，另附可选 `ims_sip`） |
 | 看不见 SIM 卡真实网络等级与签约限速，排查网速靠盲猜 | **直读 QMI 5QI/QCI 等级 + 3GPP 5GSM `0xC2` 核心网下发签约速率（Session-AMBR）** |
-| 夜间基站切频重连丢 IPv6 或极端 MHI 假死断网 | **`net_orchestrator.sh` Raw-IP 双栈自愈 + MHI 假死智能复位 + `223.5.5.5` DNS 兜底** |
+| 夜间基站切频重连丢 IPv6 或极端 MHI 假死断网 | **`net_orchestrator.sh` Raw-IP 双栈自愈 + 2 分钟 MHI `-110/-12` 智能冷启自救 + `223.5.5.5` DNS 兜底** |
 | 官方 Web 后台功能寒酸、没有验证码转发 | **Apple HIG 双主题控制台** + 微信 PushPlus / 邮箱 SMTP / Bark / Telegram / Webhook 推送 |
 
 > **关于 5G SA 与频段安全上限（重要）**：FGW3000-HK 的 SDX55 基带硬件支持 `n41 / n28 / n78 / n79 / n1 / n3 / n5` 等频段，但**高通 RFLM 射频前端交换矩阵限制单次同时激活的 `LTE + NR` 总频段数建议控制在 `≤ 5` 个以内**（按当前运营商收敛开启，切勿一次性勾选 8~10 个频段，否则可能触发基带 RFLM XSW 断言保护重启）。详见 [docs/03](docs/03-原理与常见问题.md)。
@@ -214,13 +214,14 @@ ssh root@192.168.15.1   # root / admin
 **或命令行**（SSH/Telnet）：
 
 ```sh
-sh /mnt/jffs2/auto_carrier.sh force_cmcc   # 移动 SA (n41,n28 + B3,B41)
-sh /mnt/jffs2/auto_carrier.sh force_ct     # 电信 SA (n78,n1 + B1,B3)
-sh /mnt/jffs2/auto_carrier.sh force_cu     # 联通 SA (n78,n1 + B1,B3)
-sh /mnt/jffs2/auto_carrier.sh force_cbn    # 广电 SA (n28,n41,n79 + B3,B41)
+sh /mnt/jffs2/auto_carrier.sh force_cmcc      # 移动 5G NSA 稳态推荐 (EN-DC B3+n41 + 原生 SGs 短信)
+sh /mnt/jffs2/auto_carrier.sh force_cmcc_sa   # 移动 5G SA 单 PDN (n41,n28 + B3,B41)
+sh /mnt/jffs2/auto_carrier.sh force_ct        # 电信 5G SA 单 PDN (n78,n1 + B1,B3,B5)
+sh /mnt/jffs2/auto_carrier.sh force_cu        # 联通 5G SA 单 PDN (n78,n1 + B1,B3,B8)
+sh /mnt/jffs2/auto_carrier.sh force_cbn       # 广电 5G SA 单 PDN (n28,n41,n79 + B3,B41)
 ```
 
-**验证**：`AT+C5GREG?` 返回 `+C5GREG: 0,1` 即 SA 注册成功；面板实时展示驻留频段（如 `5G n41` 100MHz）、`RANK`、`5QI` 等级与签约速率。
+**验证**：5G NSA 下 `AT+COPS?` 返回 `13`（EN-DC）且 `AT+CREG?` 返回 `0,1`（SGs 短信在线）；5G SA 下 `AT+C5GREG?` 返回 `0,1`。面板自动识别并展示 `5G NSA 非独立组网`（如 `5G n41 + B3`）或 `5G SA 独立组网`、`RANK`、`5QI` 等级与签约速率。
 
 > 完整说明见 [`docs/03-原理与常见问题.md`](docs/03-原理与常见问题.md)。
 

@@ -71,9 +71,9 @@ ip link set dev rmnet_data0 up 2>/dev/null
 
 # 1.5 High-confidence SDX55 MHI silent-hang hardware recovery (--check only)
 # Triggers clean cold reboot ONLY when ALL 3 hard conditions hold simultaneously:
-#   (1) System uptime > 600s (10 min, prevents any reboot loop)
-#   (2) 3 consecutive 1-min checks with 100% packet loss to 10.10.10.3
-#   (3) Kernel dmesg has 'qrtr_sendmsg.*-12' OR LCMServer.log has > 15 QCM_DMS_SERVICE_ERR
+#   (1) System uptime > 300s (5 min boot guard, prevents any reboot loop)
+#   (2) 2 consecutive 1-min checks with 100% packet loss to 10.10.10.3
+#   (3) Kernel dmesg has qrtr_sendmsg/wda -110 or -12, OR LCMServer.log has QCM_DMS_SERVICE_ERR / rc=-16
 if [ "$MODE" = "--check" ]; then
     if ping -c 2 -W 1 10.10.10.3 >/dev/null 2>&1; then
         [ -f "$MHI_DEAD_CNT_FILE" ] && rm -f "$MHI_DEAD_CNT_FILE"
@@ -85,17 +85,17 @@ if [ "$MODE" = "--check" ]; then
         echo "$mcnt" > "$MHI_DEAD_CNT_FILE"
 
         now_up=$(get_uptime_sec)
-        qrtr_err=$(dmesg 2>/dev/null | grep -c "qrtr_sendmsg.*-12" || true)
+        qrtr_err=$(dmesg 2>/dev/null | grep -cE "qrtr_sendmsg.*-(110|12)|wda_set_powersave_mode_req.*-(110|12)" || true)
         case "$qrtr_err" in ''|*[!0-9]*) qrtr_err=0 ;; esac
 
         dms_err=0
         if [ -f /tmp/lte_mgr/LCMServer.log ]; then
-            dms_err=$(grep -c "QCM_DMS_SERVICE_ERR" /tmp/lte_mgr/LCMServer.log 2>/dev/null || true)
+            dms_err=$(grep -cE "QCM_DMS_SERVICE_ERR|rc=-16|cmd return: \[-16\]" /tmp/lte_mgr/LCMServer.log 2>/dev/null || true)
             case "$dms_err" in ''|*[!0-9]*) dms_err=0 ;; esac
         fi
 
-        if [ "$now_up" -gt 600 ] && [ "$mcnt" -ge 3 ] && { [ "$qrtr_err" -gt 0 ] || [ "$dms_err" -gt 15 ]; }; then
-            log_event "CRITICAL_HEAL" "Confirmed SDX55 MHI silent hang (10.10.10.3 dead x3 + QRTR/QMI wedge); triggering clean system reboot (up=${now_up}s qrtr12=${qrtr_err} dms=${dms_err})"
+        if [ "$now_up" -gt 300 ] && [ "$mcnt" -ge 2 ] && { [ "$qrtr_err" -gt 0 ] || [ "$dms_err" -gt 2 ]; }; then
+            log_event "CRITICAL_HEAL" "Confirmed SDX55 MHI silent hang (10.10.10.3 dead x${mcnt} + QRTR/QMI -110/-12/-16 wedge); triggering clean system reboot (up=${now_up}s qrtr=${qrtr_err} lcm16=${dms_err})"
             sync
             umount /sbin/reboot 2>/dev/null || umount -l /sbin/reboot 2>/dev/null
             ( sleep 8; sync; /bin/busybox reboot -f ) >/dev/null 2>&1 9>&- &

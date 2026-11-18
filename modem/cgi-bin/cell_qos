@@ -98,12 +98,18 @@ eval {
                     if (open(my $wfh, ">", "/tmp/.cached_imsi")) { print $wfh "$imsi\n"; close($wfh); }
                 }
             }
-            my $bnr = `atcli 'AT+BNRINFO' 2>/dev/null`;
+            my $cops = `atcli 'AT+COPS?' 2>/dev/null`;
+            my $bnr  = `atcli 'AT+BNRINFO' 2>/dev/null`;
             alarm(0);
             flock($lfh, LOCK_UN);
+            if (defined($cops) && $cops =~ /\+COPS:\s*\d+,\d+,"[^"]*",(\d+)/) {
+                my $act = int($1);
+                $rat_str = ($act == 13) ? "NR5G-NSA" : ($act == 11) ? "NR5G-SA" : ($act == 7) ? "LTE" : $rat_str;
+            }
             if (defined($bnr) && $bnr =~ /NR BAND:\d+/s) {
                 $at_ok     = 1;
-                $rat_str   = "NR5G-SA";
+                $rat_str //= ($bnr =~ /NR5G:\s*RSRQ/i) ? "NR5G-NSA" : "NR5G-SA";
+
                 $nr_bw_mhz = int($1) if $bnr =~ /DL_bandwidth:(\d+)MHz/i;
                 $nr_rsrq   = int($1) if $bnr =~ /RSRQ\s+(-?\d+)\s*dB/i;
                 $nr_rsrp   = int($1) if $bnr =~ /RSRP\s+(-?\d+)\s*dBm/i;

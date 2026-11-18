@@ -98,7 +98,10 @@ if [ "$ACTION" = "get_cellular" ]; then
     rule_count=0
     [ -f /tmp/anti-ad-for-smartdns.conf ] && rule_count=$(wc -l < /tmp/anti-ad-for-smartdns.conf 2>/dev/null | tr -d ' ')
 
-    modem_json=$(curl -s --connect-timeout 1 -m 4 "http://10.10.10.3:55102/cgi-bin/cell_qos" 2>/dev/null)
+    nocache=$(get_query_param "nocache")
+    qos_url="http://10.10.10.3:55102/cgi-bin/cell_qos"
+    [ "$nocache" = "1" ] && qos_url="${qos_url}?nocache=1"
+    modem_json=$(curl -s --connect-timeout 1 -m 4 "$qos_url" 2>/dev/null)
     if echo "$modem_json" | grep -q '"ok":true'; then
         printf '%s\n' "$modem_json" > /tmp/.ap_cell_qos.cache 2>/dev/null
     elif [ -f /tmp/.ap_cell_qos.cache ]; then
@@ -107,12 +110,13 @@ if [ "$ACTION" = "get_cellular" ]; then
     jget() {
         echo "$modem_json" | sed -n "s/.*\"$1\":\(\"[^\"]*\"\|[^,}]*\).*/\1/p" | head -n 1
     }
-    qci_val="null"; qos_label_json="\"N/A\""
+    rat_json="null"; qci_val="null"; qos_label_json="\"N/A\""
     ambr_dl_val="null"; ambr_ul_val="null"; ambr_dl_mbps="null"; ambr_ul_mbps="null"
     ambr_avail="false"; ambr_reason_json="\"unavailable\""; ambr_hex_json="null"; ambr_src_json="null"
     nr_bwp_val="null"; nr_rank_val="null"; nr_cqi_val="null"; nr_rsrq_val="null"; nr_ssb_val="null"
     ims_run="false"; ims_reg="false"; ims_state_json="\"UNKNOWN\""; ims_ip_json="null"; ims_pcscf_json="null"
     if echo "$modem_json" | grep -q '"ok":true'; then
+        v=$(jget "rat"); [ -n "$v" ] && rat_json="$v"
         v=$(jget "qci"); [ -n "$v" ] && qci_val="$v"
         v=$(jget "qos_label"); [ -n "$v" ] && qos_label_json="$v"
         v=$(jget "ambr_dl_kbps"); [ -n "$v" ] && ambr_dl_val="$v"
@@ -156,6 +160,7 @@ if [ "$ACTION" = "get_cellular" ]; then
     "rrc_state": "$rrc_state",
     "net_mode": "$net_mode",
     "sa_mode": "$sa_mode",
+    "rat": $rat_json,
     "apn": "$apn_name",
     "lte_full_band": "$lte_full_band",
     "nr_full_band": "$nr_full_band",
@@ -220,11 +225,13 @@ fi
 if [ "$ACTION" = "set_bands" ]; then
     POST_DATA=$(read_post_data)
     mode=$(echo "$POST_DATA" | grep -o -E '(^|&)mode=[^&]*' | sed -e 's/^&//' -e 's/^mode=//')
+    sa_mode=$(echo "$POST_DATA" | grep -o -E '(^|&)sa_mode=[^&]*' | sed -e 's/^&//' -e 's/^sa_mode=//')
     lte_bands=$(echo "$POST_DATA" | grep -o -E '(^|&)lte_bands=[^&]*' | sed -e 's/^&//' -e 's/^lte_bands=//')
     nr_bands=$(echo "$POST_DATA" | grep -o -E '(^|&)nr_bands=[^&]*' | sed -e 's/^&//' -e 's/^nr_bands=//')
 
     if [ -z "$mode" ]; then
         mode=$(echo "$POST_DATA" | sed -n 's/.*"mode":[ ]*"\([^"]*\)".*/\1/p')
+        sa_mode=$(echo "$POST_DATA" | sed -n 's/.*"sa_mode":[ ]*"\([^"]*\)".*/\1/p')
         lte_bands=$(echo "$POST_DATA" | sed -n 's/.*"lte_bands":[ ]*"\([^"]*\)".*/\1/p')
         nr_bands=$(echo "$POST_DATA" | sed -n 's/.*"nr_bands":[ ]*"\([^"]*\)".*/\1/p')
     fi
@@ -232,26 +239,33 @@ if [ "$ACTION" = "set_bands" ]; then
     lte_bands=$(echo "$lte_bands" | sed 's/%2[cC]/,/g')
     nr_bands=$(echo "$nr_bands" | sed 's/%2[cC]/,/g')
     mode=$(echo "$mode" | sed 's/%2[cC]/,/g')
+    sa_mode=$(echo "$sa_mode" | sed 's/%2[cC]/,/g')
 
     [ -z "$mode" ] && mode="2"
-    [ -z "$lte_bands" ] && lte_bands="1,3,7,8"
-    [ -z "$nr_bands" ] && nr_bands="1,3,5,28,78,79"
+    if [ -z "$sa_mode" ]; then
+        sa_mode=$(get_cms_val "threeG_network_sa_mode")
+        [ -z "$sa_mode" ] && sa_mode="1"
+    fi
+    [ -z "$lte_bands" ] && lte_bands="3,41"
+    [ -z "$nr_bands" ] && nr_bands="41,28"
 
     cmscfg -s -n threeG_network_mode -v "$mode" >/dev/null 2>&1
-    cmscfg -s -n threeG_network_sa_mode -v "0" >/dev/null 2>&1
+    cmscfg -s -n threeG_network_sa_mode -v "$sa_mode" >/dev/null 2>&1
     cmscfg -s -n LTE_FullBand -v "$lte_bands" >/dev/null 2>&1
+    cmscfg -s -n LTE_SupportBand -v "$lte_bands" >/dev/null 2>&1
     cmscfg -s -n NR_FullBand -v "$nr_bands" >/dev/null 2>&1
+    cmscfg -s -n NR_SupportBand -v "$nr_bands" >/dev/null 2>&1
     cmscfg -w /mnt/jffs2/conf/user/multimode.conf >/dev/null 2>&1
     cmscfg -w /mnt/jffs2/conf/user/ltesetting.conf >/dev/null 2>&1
     cmscfg -w /mnt/jffs2/conf/user/nrsetting.conf >/dev/null 2>&1
-    killall -SIGALRM lte_mgr 2>/dev/null
 
     cat <<EOF
 {
   "success": true,
-  "message": "Band settings applied successfully",
+  "message": "Band settings persisted (reboot recommended to apply cleanly)",
   "applied": {
     "mode": "$mode",
+    "sa_mode": "$sa_mode",
     "lte_bands": "$lte_bands",
     "nr_bands": "$nr_bands"
   }
@@ -403,20 +417,25 @@ sync_dnsmasq_adblock() {
         done > "$ad_conf"
     fi
 
-    # Ensure /tmp/dnsmasq.conf includes this conf-file and reload dnsmasq
+    # Ensure /tmp/dnsmasq.conf includes this conf-file and reload dnsmasq (aligned with startup.sh)
     if [ -f /tmp/dnsmasq.conf ]; then
-        grep -q "conf-file=$ad_conf" /tmp/dnsmasq.conf || echo "conf-file=$ad_conf" >> /tmp/dnsmasq.conf
-        sed -i '/127.0.0.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
-        sed -i '/192.168.15.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
-        sed -i '/223.5.5.5/d' /tmp/dnsmasq.conf 2>/dev/null
-        sed -i '/strict-order/d' /tmp/dnsmasq.conf 2>/dev/null
-        sed -i '/no-resolv/d' /tmp/dnsmasq.conf 2>/dev/null
-        echo "server=127.0.0.1#6053" >> /tmp/dnsmasq.conf
-        echo "no-resolv" >> /tmp/dnsmasq.conf
-        echo "nameserver 127.0.0.1" > /tmp/etc/resolv.conf
-        killall -9 dnsmasq dnsmasq.real dnsmasq_real 2>/dev/null
-        sleep 1
-        /usr/sbin/dnsmasq -i br0 -i lo --conntrack --bind-interfaces -K -N -C /tmp/dnsmasq.conf --pid-file=/var/run/dnsmasq.pid 2>/dev/null
+        (
+            flock -x 8
+            grep -q "conf-file=$ad_conf" /tmp/dnsmasq.conf || echo "conf-file=$ad_conf" >> /tmp/dnsmasq.conf
+            sed -i '/127.0.0.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
+            sed -i '/192.168.15.1#6053/d' /tmp/dnsmasq.conf 2>/dev/null
+            sed -i '/223.5.5.5/d' /tmp/dnsmasq.conf 2>/dev/null
+            sed -i '/strict-order/d' /tmp/dnsmasq.conf 2>/dev/null
+            sed -i '/no-resolv/d' /tmp/dnsmasq.conf 2>/dev/null
+            echo "strict-order" >> /tmp/dnsmasq.conf
+            echo "server=127.0.0.1#6053" >> /tmp/dnsmasq.conf
+            echo "server=223.5.5.5" >> /tmp/dnsmasq.conf
+            echo "no-resolv" >> /tmp/dnsmasq.conf
+            echo "nameserver 127.0.0.1" > /tmp/etc/resolv.conf
+            killall -9 dnsmasq dnsmasq.real dnsmasq_real 2>/dev/null
+            sleep 1
+            /usr/sbin/dnsmasq -i br0 -i lo --conntrack --bind-interfaces -K -N -C /tmp/dnsmasq.conf --pid-file=/var/run/dnsmasq.pid 2>/dev/null 8>&-
+        ) 8>/var/run/dnsmasq_cfg.lock
     fi
 }
 

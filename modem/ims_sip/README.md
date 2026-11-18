@@ -31,4 +31,4 @@ go build -trimpath -ldflags="-s -w" -o ims_sip main.go
 - 二进制路径：`/data/ims_sip`（`chmod +x /data/ims_sip`）
 - 状态文件：`/tmp/ims_sip.status`、`/tmp/ims_sip.log`
 - 控制接口：`/data/www/cgi-bin/ims_sip_ctl?action=status|ensure|restart|stop`
-- 开机自启：由基带 `/data/oem_init_post.sh` 启动，并由主路由 `/mnt/jffs2/startup.sh` 跨端探活兜底。
+- 开机门控（默认关闭）：由于港版 SDX55 固件（`RXMG1.37.00.427_0C03`）在 **5G SA** 下长期并发维持第 2 条 `ims` PDU 会话存在 MPSS `-110` 死锁缺陷，日常 7×24 稳态推荐使用 **5G NSA (`EN-DC`, `sa_mode=1`) + `CS+PS` 原生 SGs 短信**（无需运行 `ims_sip`）。仅当创建显式开关文件 `/data/.enable_ims_sip`（基带）与 `/mnt/jffs2/conf/user/.enable_ims_sip`（主路由）时，`/data/oem_init_post.sh` 与 `/mnt/jffs2/startup.sh` 才会自动拉起 `ims_sip`。

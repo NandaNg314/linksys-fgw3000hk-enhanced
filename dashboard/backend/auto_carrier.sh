@@ -88,7 +88,7 @@ check_and_adapt() {
         898600*|898602*|898604*|898607*|898608*)
             detected_op="CMCC"
             target_apn="cmnet"
-            target_sa="0"
+            target_sa="1"
             ;;
         898615*)
             detected_op="CBN"
@@ -110,7 +110,7 @@ check_and_adapt() {
                 46000|46002|46007|46008)
                     detected_op="CMCC"
                     target_apn="cmnet"
-                    target_sa="0"
+                    target_sa="1"
                     ;;
                 46015)
                     detected_op="CBN"
@@ -157,7 +157,11 @@ elif [ "$MODE" = "daemon" ]; then
         sleep 20
     done
 elif [ "$MODE" = "force_cmcc" ]; then
-    log "Manual override: Force China Mobile profile"
+    log "Manual override: Force China Mobile 5G NSA (EN-DC + SGs) profile"
+    echo "CMCC" > /tmp/last_detected_operator
+    apply_carrier_profile "CMCC" "cmnet" "1"
+elif [ "$MODE" = "force_cmcc_sa" ]; then
+    log "Manual override: Force China Mobile 5G SA profile"
     echo "CMCC" > /tmp/last_detected_operator
     apply_carrier_profile "CMCC" "cmnet" "0"
 elif [ "$MODE" = "force_cbn" ]; then
