@@ -43,7 +43,7 @@ An open-source enhancement suite for the **Linksys FGW3000-HK** 5G CPE:
 | **原厂固件默认未开启 5G SA**，隐藏国内移动 `n41` 等主力频段 | **开启 5G SA 并解锁国内四大运营商频段（移动/广电 `n41/n28/n79`、电信/联通 `n78/n1`）** |
 | 5G 模式下无法收发短信验证码，多 PDN 拨号导致硬件加速失效 | **基带本地 QRTR 5G IMS 短信守护（`ims_sip`）**，单 PDN 满速与 5G 实时收信兼得 |
 | 看不见 SIM 卡真实网络等级与签约限速，排查网速靠盲猜 | **直读 QMI 5QI/QCI 等级 + 3GPP 5GSM `0xC2` 核心网下发签约速率（Session-AMBR）** |
-| 夜间基站节能切频/重拨易丢 IPv6 或 DHCP 租约失同步断网 | **`net_orchestrator.sh` 双栈自愈 + 常驻 `udhcpc -b` + `223.5.5.5` DNS 零停机兜底** |
+| 夜间基站切频重连丢 IPv6 或极端 MHI 假死断网 | **`net_orchestrator.sh` Raw-IP 双栈自愈 + MHI 假死智能复位 + `223.5.5.5` DNS 兜底** |
 | 官方 Web 后台功能寒酸、没有验证码转发 | **Apple HIG 双主题控制台** + 微信 PushPlus / 邮箱 SMTP / Bark / Telegram / Webhook 推送 |
 
 > **关于 5G SA 与频段安全上限（重要）**：FGW3000-HK 的 SDX55 基带硬件支持 `n41 / n28 / n78 / n79 / n1 / n3 / n5` 等频段，但**高通 RFLM 射频前端交换矩阵限制单次同时激活的 `LTE + NR` 总频段数建议控制在 `≤ 5` 个以内**（按当前运营商收敛开启，切勿一次性勾选 8~10 个频段，否则可能触发基带 RFLM XSW 断言保护重启）。详见 [docs/03](docs/03-原理与常见问题.md)。

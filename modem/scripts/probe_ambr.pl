@@ -8,13 +8,6 @@ my $force = (@ARGV && $ARGV[0] eq "--force") ? 1 : 0;
 open(my $plock, ">", "/tmp/.ambr_probe.lock") or exit 0;
 flock($plock, LOCK_EX | LOCK_NB) or exit 0;
 
-my $boot_id = "";
-if (open(my $bf, "<", "/proc/sys/kernel/random/boot_id")) {
-    $boot_id = <$bf> // "";
-    close($bf);
-    $boot_id =~ s/\s+//g;
-}
-
 my $imsi = "";
 if (!$force && open(my $ifh, "<", "/tmp/.cached_imsi")) {
     my $c = <$ifh> // "";
@@ -50,8 +43,7 @@ if (!$force && open(my $cf, "<", $cache_path)) {
     my $old = <$cf> // "";
     close($cf);
     if ($old =~ /"ambr_available"\s*:\s*true/ &&
-        $old =~ /"imsi"\s*:\s*"\Q$imsi\E"/ &&
-        $old =~ /"boot_id"\s*:\s*"\Q$boot_id\E"/) {
+        $old =~ /"imsi"\s*:\s*"\Q$imsi\E"/) {
         exit 0;
     }
 }
@@ -170,33 +162,10 @@ if (opendir(my $dh, $cap_dir)) {
                 my $ab = substr($u, $p + $qlen + 1, 6);
                 my ($udl, $dl_v, $uul, $ul_v) = unpack("C n C n", $ab);
                 next unless exists($unit_kbps{$udl}) && exists($unit_kbps{$uul});
-                $found_dl  = $unit_kbps{$udl} * $dl_v;
-                $found_ul  = $unit_kbps{$uul} * $ul_v;
-                $found_hex = "06" . unpack("H*", $ab);
 
-                # Optional IEs parse (0x79 QoS flow descriptions, 0x25 DNN)
-                my $opt = substr($u, $p + $qlen + 7, 160);
-                if ($opt =~ /\x79(..)/s) {
-                    my $flen = unpack("n", $1);
-                    my $fp = pos($opt);
-                    if ($flen >= 6 && $fp + $flen <= length($opt)) {
-                        my $fbody = substr($opt, $fp, $flen);
-                        # Walk params inside first QFD: qfi(1), op(1), num_p(1), then [id(1), len(1), val(len)]
-                        my $ idx = 3;
-                        while ($idx + 2 <= length($fbody)) {
-                            my ($pid_b, $plen_b) = unpack("C C", substr($fbody, $idx, 2));
-                            $idx += 2;
-                            last if $idx + $plen_b > length($fbody);
-                            my $pval = substr($fbody, $idx, $plen_b);
-                            if ($pid_b == 0x01 && $plen_b == 1) {
-                                $found_5qi = ord($pval);
-                            } elsif ($pid_b == 0x07 && $plen_b == 1) {
-                                $found_arp = (ord($pval) >> 4) & 0x0F;
-                            }
-                            $idx += $plen_b;
-                        }
-                    }
-                }
+                # Optional IEs parse (0x79 QoS flow descriptions, 0x25 DNN) BEFORE accepting
+                my $opt = substr($u, $p + $qlen + 7, 512);
+                my $pkt_dnn = undef;
                 if ($opt =~ /\x25([\x02-\x20])/s) {
                     my $dlen = ord($1);
                     my $dp = pos($opt);
@@ -204,10 +173,42 @@ if (opendir(my $dh, $cap_dir)) {
                         my $ll = ord(substr($opt, $dp, 1));
                         if ($ll >= 1 && $ll < $dlen) {
                             my $str = substr($opt, $dp + 1, $ll);
-                            $found_dnn = $str if $str =~ /^[A-Za-z0-9_\-]+$/;
+                            $pkt_dnn = $str if $str =~ /^[A-Za-z0-9_\-]+$/;
                         }
                     }
                 }
+                # Strictly exclude ims/sos and require target primary data DNN
+                next if defined($pkt_dnn) && (lc($pkt_dnn) eq "ims" || lc($pkt_dnn) eq "sos");
+                next unless defined($pkt_dnn) && (lc($pkt_dnn) eq lc($base_apn) || ($base_apn eq "cmnet" && lc($pkt_dnn) eq "cmwap"));
+
+                my ($pkt_5qi, $pkt_arp) = (undef, undef);
+                if ($opt =~ /\x79(..)/s) {
+                    my $flen = unpack("n", $1);
+                    my $fp = pos($opt);
+                    if ($flen >= 6 && $fp + $flen <= length($opt)) {
+                        my $fbody = substr($opt, $fp, $flen);
+                        my $idx = 3;
+                        while ($idx + 2 <= length($fbody)) {
+                            my ($pid_b, $plen_b) = unpack("C C", substr($fbody, $idx, 2));
+                            $idx += 2;
+                            last if $idx + $plen_b > length($fbody);
+                            my $pval = substr($fbody, $idx, $plen_b);
+                            if ($pid_b == 0x01 && $plen_b == 1) {
+                                $pkt_5qi = ord($pval);
+                            } elsif ($pid_b == 0x07 && $plen_b == 1) {
+                                $pkt_arp = (ord($pval) >> 4) & 0x0F;
+                            }
+                            $idx += $plen_b;
+                        }
+                    }
+                }
+
+                $found_dl  = $unit_kbps{$udl} * $dl_v;
+                $found_ul  = $unit_kbps{$uul} * $ul_v;
+                $found_hex = "06" . unpack("H*", $ab);
+                $found_5qi = $pkt_5qi;
+                $found_arp = $pkt_arp;
+                $found_dnn = $pkt_dnn;
                 last OUTER;
             }
         }
@@ -223,8 +224,8 @@ if (defined($found_dl) && defined($found_ul) && $found_dl > 0) {
     my $arp = defined($found_arp) ? $found_arp : "null";
     my $now = time();
     my $json = sprintf(
-        qq({"ok":true,"imsi":"%s","boot_id":"%s","ts":%d,"dnn":"%s","ambr_available":true,"ambr_dl_kbps":%d,"ambr_ul_kbps":%d,"ambr_dl_mbps":%d,"ambr_ul_mbps":%d,"ambr_raw_hex":"%s","ambr_source":"5gsm_ota_0xc2","ota_5qi":%s,"ota_arp":%s}\n),
-        $imsi, $boot_id, $now, $found_dnn, $found_dl, $found_ul, $dl_mbps, $ul_mbps, $found_hex, $q5, $arp
+        qq({"ok":true,"imsi":"%s","ts":%d,"dnn":"%s","ambr_available":true,"ambr_dl_kbps":%d,"ambr_ul_kbps":%d,"ambr_dl_mbps":%d,"ambr_ul_mbps":%d,"ambr_raw_hex":"%s","ambr_source":"5gsm_ota_0xc2","ota_5qi":%s,"ota_arp":%s}\n),
+        $imsi, $now, $found_dnn, $found_dl, $found_ul, $dl_mbps, $ul_mbps, $found_hex, $q5, $arp
     );
     my $tmp = "$cache_path.tmp.$$";
     if (open(my $wf, ">", $tmp)) {

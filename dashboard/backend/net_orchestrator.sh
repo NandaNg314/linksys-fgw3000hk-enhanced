@@ -7,9 +7,8 @@
 MODE="${1:---boot}"
 LOCK_FILE="/var/run/fgw_orchestrator.lock"
 STATE_FILE="/tmp/.wan_state"
-BOUND_IP_FILE="/tmp/.udhcpc_bound_ip"
-FAIL_CNT_FILE="/tmp/.wan_fail_cnt"
-LAST_HEAL_FILE="/tmp/.wan_last_heal"
+MHI_DEAD_CNT_FILE="/tmp/.modem_mhi_dead_cnt"
+LAST_RENEW_FILE="/tmp/.wan_last_renew"
 EVENT_LOG="/mnt/jffs2/wan_events.log"
 UDHCPC_PID="/var/run/udhcpc_data.pid"
 
@@ -24,6 +23,7 @@ log_event() {
     echo "[$ts] [$tag] $msg" >> "$EVENT_LOG" 2>/dev/null
     local lines
     lines=$(wc -l < "$EVENT_LOG" 2>/dev/null || echo 0)
+    case "$lines" in ''|*[!0-9]*) lines=0 ;; esac
     if [ "$lines" -gt 200 ]; then
         tail -n 200 "$EVENT_LOG" > /tmp/wan_events.tmp 2>/dev/null && mv -f /tmp/wan_events.tmp "$EVENT_LOG" 2>/dev/null
     fi
@@ -43,61 +43,69 @@ get_v6() {
 }
 
 get_uptime_sec() {
-    cut -d. -f1 /proc/uptime 2>/dev/null || echo 0
+    local up
+    up=$(cut -d. -f1 /proc/uptime 2>/dev/null)
+    case "$up" in ''|*[!0-9]*) up=0 ;; esac
+    echo "$up"
 }
 
-start_clean_udhcpc() {
-    local old_pid=""
-    [ -f "$UDHCPC_PID" ] && old_pid=$(cat "$UDHCPC_PID" 2>/dev/null)
-    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
-        kill "$old_pid" 2>/dev/null
-        sleep 1
-    fi
-    killall -q udhcpc 2>/dev/null
-
-    # Close fd 9 (9>&-) so background udhcpc never inherits the orchestrator flock!
-    udhcpc -i rmnet_data0 -p "$UDHCPC_PID" -s /usr/share/udhcpc/default.script -b -t 3 -T 3 -A 20 >/dev/null 2>&1 9>&-
-    sleep 2
-
-    local post_ip
-    post_ip=$(get_v4)
-    if [ -z "$post_ip" ]; then
-        log_event "WARN" "udhcpc did not obtain lease immediately; calling wan_ip_renew"
-        mc_trigger wan_ip_renew >/dev/null 2>&1 9>&-
-        sleep 2
-        post_ip=$(get_v4)
-    fi
-    [ -n "$post_ip" ] && echo "$post_ip" > "$BOUND_IP_FILE"
-    local new_pid=""
-    [ -f "$UDHCPC_PID" ] && new_pid=$(cat "$UDHCPC_PID" 2>/dev/null)
-    log_event "DHCP" "udhcpc daemon synced (pid=${new_pid:-none}, ip=${post_ip:-none})"
-}
-
-ensure_udhcpc() {
-    local cur_ip="$1"
-    local pid=""
-    [ -f "$UDHCPC_PID" ] && pid=$(cat "$UDHCPC_PID" 2>/dev/null)
-    local bound_ip=""
-    [ -f "$BOUND_IP_FILE" ] && bound_ip=$(cat "$BOUND_IP_FILE" 2>/dev/null)
-
-    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
-        start_clean_udhcpc
-        return 0
-    fi
-
-    # If lte_mgr re-activated cid=1 with a new IPv4, rebind udhcpc to the new lease
-    if [ -n "$cur_ip" ] && [ -n "$bound_ip" ] && [ "$cur_ip" != "$bound_ip" ]; then
-        log_event "DHCP_SYNC" "WAN IPv4 drifted ($bound_ip -> $cur_ip); rebinding udhcpc"
-        start_clean_udhcpc
-        return 0
+restore_local_resolv() {
+    if [ -f /mnt/jffs2/proxy/smartdns ] && ! grep -q "127.0.0.1" /tmp/etc/resolv.conf 2>/dev/null; then
+        echo "nameserver 127.0.0.1" > /tmp/etc/resolv.conf 2>/dev/null
     fi
 }
 
-# 1. Ensure WAN interfaces are UP
+# 0. Retire any legacy persistent udhcpc -b daemon on Raw-IP rmnet_data0
+# Use SIGKILL + pidfile removal so default.script deconfig is NEVER triggered.
+if [ -f "$UDHCPC_PID" ] || pgrep -f "udhcpc.*rmnet_data0" >/dev/null 2>&1; then
+    rm -f "$UDHCPC_PID" /tmp/.udhcpc_bound_ip 2>/dev/null
+    for upid in $(pgrep -f "udhcpc.*rmnet_data0" 2>/dev/null); do
+        kill -9 "$upid" 2>/dev/null
+    done
+fi
+
+# 1. Ensure MHI control & WAN data interfaces are UP
+ip link set dev rmnet_mhi_sw0 arp off up 2>/dev/null
 ip link set dev rmnet_mhi0 up 2>/dev/null
 ip link set dev rmnet_data0 up 2>/dev/null
 
-# 2. Boot mode: wait up to 60s for CMServerState=5 and initial IPv4
+# 1.5 High-confidence SDX55 MHI silent-hang hardware recovery (--check only)
+# Triggers clean cold reboot ONLY when ALL 3 hard conditions hold simultaneously:
+#   (1) System uptime > 600s (10 min, prevents any reboot loop)
+#   (2) 3 consecutive 1-min checks with 100% packet loss to 10.10.10.3
+#   (3) Kernel dmesg has 'qrtr_sendmsg.*-12' OR LCMServer.log has > 15 QCM_DMS_SERVICE_ERR
+if [ "$MODE" = "--check" ]; then
+    if ping -c 2 -W 1 10.10.10.3 >/dev/null 2>&1; then
+        [ -f "$MHI_DEAD_CNT_FILE" ] && rm -f "$MHI_DEAD_CNT_FILE"
+    else
+        mcnt=0
+        [ -f "$MHI_DEAD_CNT_FILE" ] && mcnt=$(cat "$MHI_DEAD_CNT_FILE" 2>/dev/null)
+        case "$mcnt" in ''|*[!0-9]*) mcnt=0 ;; esac
+        mcnt=$((mcnt + 1))
+        echo "$mcnt" > "$MHI_DEAD_CNT_FILE"
+
+        now_up=$(get_uptime_sec)
+        qrtr_err=$(dmesg 2>/dev/null | grep -c "qrtr_sendmsg.*-12" || true)
+        case "$qrtr_err" in ''|*[!0-9]*) qrtr_err=0 ;; esac
+
+        dms_err=0
+        if [ -f /tmp/lte_mgr/LCMServer.log ]; then
+            dms_err=$(grep -c "QCM_DMS_SERVICE_ERR" /tmp/lte_mgr/LCMServer.log 2>/dev/null || true)
+            case "$dms_err" in ''|*[!0-9]*) dms_err=0 ;; esac
+        fi
+
+        if [ "$now_up" -gt 600 ] && [ "$mcnt" -ge 3 ] && { [ "$qrtr_err" -gt 0 ] || [ "$dms_err" -gt 15 ]; }; then
+            log_event "CRITICAL_HEAL" "Confirmed SDX55 MHI silent hang (10.10.10.3 dead x3 + QRTR/QMI wedge); triggering clean system reboot (up=${now_up}s qrtr12=${qrtr_err} dms=${dms_err})"
+            sync
+            umount /sbin/reboot 2>/dev/null || umount -l /sbin/reboot 2>/dev/null
+            ( sleep 8; sync; /bin/busybox reboot -f ) >/dev/null 2>&1 9>&- &
+            /sbin/reboot 9>&-
+            exit 0
+        fi
+    fi
+fi
+
+# 2. Boot mode: wait up to 60s for CMServerState=5 and initial Raw-IP IPv4
 if [ "$MODE" = "--boot" ]; then
     echo "=== [Linksys FGW3000 5G/4G WAN Orchestrator --boot] ==="
     for i in $(seq 1 30); do
@@ -127,23 +135,32 @@ PDN_LINE=""
 PDN_V4=$(echo "$PDN_LINE" | cut -d',' -f3)
 PDN_GW=$(echo "$PDN_LINE" | cut -d',' -f9)
 
-# 3. IPv4, PDN sync & single-instance udhcpc check
+# 3. QMI Raw-IP IPv4 & default route check (NO persistent udhcpc -b, NO ping-drop deconfig!)
 WAN_V4=$(get_v4)
-if [ "$CM_STATE" = "5" ]; then
-    if [ -n "$PDN_V4" ] && [ -n "$WAN_V4" ] && [ "$WAN_V4" != "$PDN_V4" ]; then
-        log_event "RECOVERY" "rmnet_data0 IPv4 ($WAN_V4) != PdnList1 ($PDN_V4); syncing"
-        start_clean_udhcpc
-        WAN_V4=$(get_v4)
-    else
-        ensure_udhcpc "$WAN_V4"
-        WAN_V4=$(get_v4)
-    fi
-fi
+NOW_UP=$(get_uptime_sec)
+LAST_RENEW=0
+[ -f "$LAST_RENEW_FILE" ] && LAST_RENEW=$(cat "$LAST_RENEW_FILE" 2>/dev/null)
+case "$LAST_RENEW" in ''|*[!0-9]*) LAST_RENEW=0 ;; esac
 
-if [ -z "$WAN_V4" ] && [ "$CM_STATE" = "5" ]; then
-    mc_trigger wan_ip_renew >/dev/null 2>&1 9>&-
-    sleep 2
-    WAN_V4=$(get_v4)
+if [ "$CM_STATE" = "5" ]; then
+    if [ -n "$WAN_V4" ] && [ -n "$PDN_V4" ] && [ "$WAN_V4" != "$PDN_V4" ]; then
+        log_event "RECOVERY" "rmnet_data0 IPv4 ($WAN_V4) != PdnList1 ($PDN_V4); syncing via wan_ip_renew"
+        echo "$NOW_UP" > "$LAST_RENEW_FILE"
+        mc_trigger wan_ip_renew >/dev/null 2>&1 9>&-
+        sleep 2
+        WAN_V4=$(get_v4)
+    elif [ -z "$WAN_V4" ] && { [ "$MODE" = "--boot" ] || [ "$LAST_RENEW" -eq 0 ] || [ $((NOW_UP - LAST_RENEW)) -ge 120 ]; }; then
+        echo "$NOW_UP" > "$LAST_RENEW_FILE"
+        mc_trigger wan_ip_renew >/dev/null 2>&1 9>&-
+        sleep 3
+        WAN_V4=$(get_v4)
+        if [ -z "$WAN_V4" ]; then
+            log_event "WARN" "rmnet_data0 still has no IPv4 after wan_ip_renew; running one-shot udhcpc -n -q"
+            udhcpc -i rmnet_data0 -s /usr/share/udhcpc/default.script -n -q -t 2 -T 2 >/dev/null 2>&1 9>&-
+            restore_local_resolv
+            WAN_V4=$(get_v4)
+        fi
+    fi
 fi
 
 if [ -n "$WAN_V4" ]; then
@@ -157,40 +174,19 @@ if [ -n "$WAN_V4" ]; then
     fi
 fi
 
-# 3.5 Data-plane stale-session guard (2 consecutive failures + 300s cooldown, zero SIGALRM)
-if [ "$MODE" = "--check" ] && [ "$CM_STATE" = "5" ] && [ -n "$WAN_V4" ]; then
-    if ping -I rmnet_data0 -c 1 -W 2 223.5.5.5 >/dev/null 2>&1 || ping -I rmnet_data0 -c 1 -W 2 119.29.29.29 >/dev/null 2>&1; then
-        [ -f "$FAIL_CNT_FILE" ] && rm -f "$FAIL_CNT_FILE"
-    else
-        fcnt=0
-        [ -f "$FAIL_CNT_FILE" ] && fcnt=$(cat "$FAIL_CNT_FILE" 2>/dev/null || echo 0)
-        fcnt=$((fcnt + 1))
-        echo "$fcnt" > "$FAIL_CNT_FILE"
-        now_up=$(get_uptime_sec)
-        last_heal=0
-        [ -f "$LAST_HEAL_FILE" ] && last_heal=$(cat "$LAST_HEAL_FILE" 2>/dev/null || echo 0)
-        if [ "$fcnt" -ge 2 ] && [ $((now_up - last_heal)) -ge 300 ]; then
-            echo "$now_up" > "$LAST_HEAL_FILE"
-            rm -f "$FAIL_CNT_FILE"
-            log_event "SELF_HEAL" "WAN data-plane unreachable x2 on $WAN_V4; refreshing DHCP + wan_ip_renew"
-            start_clean_udhcpc
-            mc_trigger wan_ip_renew >/dev/null 2>&1 9>&-
-            sleep 2
-            WAN_V4=$(get_v4)
-        fi
-    fi
-fi
-
 # 4. IPv6 & br0 prefix consistency check (no SIGALRM lte_mgr!)
 WAN_V6=$(get_v6)
 DEF_V6=$(ip -6 route show default 2>/dev/null | grep "rmnet_data0")
 
 if [ -n "$WAN_V4" ] && { [ -z "$WAN_V6" ] || [ -z "$DEF_V6" ]; }; then
-    log_event "RECOVERY" "IPv6 missing or no default route (v6=${WAN_V6:-none}), triggering wan_ip_renew"
-    mc_trigger wan_ip_renew >/dev/null 2>&1 9>&-
-    sleep 2
-    WAN_V6=$(get_v6)
-    DEF_V6=$(ip -6 route show default 2>/dev/null | grep "rmnet_data0")
+    if [ "$LAST_RENEW" -eq 0 ] || [ $((NOW_UP - LAST_RENEW)) -ge 300 ]; then
+        echo "$NOW_UP" > "$LAST_RENEW_FILE"
+        log_event "RECOVERY" "IPv6 missing or no default route (v6=${WAN_V6:-none}), triggering wan_ip_renew"
+        mc_trigger wan_ip_renew >/dev/null 2>&1 9>&-
+        sleep 2
+        WAN_V6=$(get_v6)
+        DEF_V6=$(ip -6 route show default 2>/dev/null | grep "rmnet_data0")
+    fi
     if [ -n "$WAN_V6" ] && [ -z "$DEF_V6" ]; then
         ip -6 route replace default dev rmnet_data0 metric 1024 2>/dev/null
         log_event "RECOVERY" "Restored IPv6 default route on rmnet_data0 ($WAN_V6)"
@@ -235,7 +231,6 @@ fi
 CUR_LINE="${CUR_STATUS}|${WAN_V4}|${WAN_V6}"
 if [ "$CUR_LINE" != "$PREV_LINE" ]; then
     echo "$CUR_LINE" > "$STATE_FILE"
-    [ -n "$WAN_V4" ] && echo "$WAN_V4" > "$BOUND_IP_FILE"
     if [ -z "$PREV_LINE" ]; then
         log_event "BOOT_${CUR_STATUS}" "v4=${WAN_V4:-none} v6=${WAN_V6:-none} cm=${CM_STATE:-?} call=${CALL_STATE:-?}"
     else
@@ -244,3 +239,4 @@ if [ "$CUR_LINE" != "$PREV_LINE" ]; then
 fi
 
 exit 0
+

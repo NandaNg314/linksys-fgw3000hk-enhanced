@@ -15,7 +15,3 @@ fi
 if [ -x /data/ims_sip ] && ! pgrep -f '^/data/ims_sip$' >/dev/null 2>&1; then
     nohup /data/ims_sip >/dev/null 2>&1 &
 fi
-
-if [ -x /data/probe_ambr.pl ]; then
-    /data/probe_ambr.pl >/dev/null 2>&1 &
-fi

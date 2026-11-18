@@ -1,16 +1,13 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-use Socket;
 use Fcntl qw(:flock);
-
-use constant AF_QIPCRTR => 42;
 
 print "Content-Type: application/json; charset=utf-8\r\n\r\n";
 
 my $cache_file = "/tmp/.cell_qos.cache";
 my $ambr_cache = "/data/.cached_ambr.json";
-my $cache_ttl  = 12;
+my $cache_ttl  = 15;
 my $now        = time();
 
 my $qs = $ENV{QUERY_STRING} // "";
@@ -43,42 +40,6 @@ sub json_num {
     my ($n) = @_;
     return "null" unless defined($n) && $n =~ /^-?\d+(?:\.\d+)?$/;
     return $n;
-}
-
-sub pack_sa_qrtr { return pack("S S L L", AF_QIPCRTR, 0, $_[0], $_[1]); }
-
-sub qmi_send_recv {
-    my ($sock, $node, $port, $ctrl, $txid, $msgid, $tlvs_bin) = @_;
-    $tlvs_bin //= "";
-    my $pkt = pack("C S S S", $ctrl, $txid, $msgid, length($tlvs_bin)) . $tlvs_bin;
-    send($sock, $pkt, 0, pack_sa_qrtr($node, $port)) or return undef;
-    my $rin = '';
-    vec($rin, fileno($sock), 1) = 1;
-    return undef unless select($rin, undef, undef, 0.6) > 0;
-    my $buf = '';
-    recv($sock, $buf, 4096, 0);
-    return $buf;
-}
-
-sub parse_tlvs {
-    my ($buf) = @_;
-    return () if !defined($buf) || length($buf) < 7;
-    my $pos = 7;
-    my %tlvs;
-    while ($pos + 3 <= length($buf)) {
-        my ($t, $l) = unpack("C S", substr($buf, $pos, 3));
-        $pos += 3;
-        last if $pos + $l > length($buf);
-        $tlvs{$t} = substr($buf, $pos, $l);
-        $pos += $l;
-    }
-    return %tlvs;
-}
-
-sub qmi_err {
-    my (%t) = @_;
-    return (-1, -1) unless exists($t{0x02}) && length($t{0x02}) == 4;
-    return unpack("S S", $t{0x02});
 }
 
 # 1. IMS status
@@ -114,74 +75,7 @@ if (open(my $sf, "<", "/tmp/ims_sip.status")) {
 }
 $ims_state = "STOPPED" unless $ims_running;
 
-# 2. QRTR QMI lookup (QOS=4, WDS=1)
-my %svc_port;
-my $ql = qx(qrtr-lookup 2>/dev/null);
-for my $line (split /\n/, ($ql // "")) {
-    my @f = split /\s+/, $line;
-    shift @f while @f && $f[0] eq '';
-    if (@f >= 5 && $f[0] =~ /^\d+$/ && $f[3] =~ /^\d+$/ && $f[4] =~ /^\d+$/) {
-        $svc_port{int($f[0])} = [int($f[3]), int($f[4])];
-    }
-}
-
-my ($qci_ul, $qci_dl, $qci) = (undef, undef, undef);
-my $rat_str = undef;
-my $tx = 1;
-
-if (exists $svc_port{4}) {
-    my ($qn, $qp) = @{$svc_port{4}};
-    if (socket(my $qs_sock, AF_QIPCRTR, SOCK_DGRAM, 0)) {
-        my $bind_tlv = pack("C S L L", 0x10, 8, 3, 4) . pack("C S C", 0x11, 1, 0x80);
-        my $rb = qmi_send_recv($qs_sock, $qn, $qp, 0x00, $tx++, 0x002B, $bind_tlv);
-        my ($res_b, $err_b) = qmi_err(parse_tlvs($rb));
-        if ($res_b == 0) {
-            my $rq = qmi_send_recv($qs_sock, $qn, $qp, 0x00, $tx++, 0x0033, "");
-            my %qt = parse_tlvs($rq);
-            my ($res_q, $err_q) = qmi_err(%qt);
-            if ($res_q == 0) {
-                for my $pair ([0x11, \$qci_ul], [0x12, \$qci_dl]) {
-                    my ($tid, $ref) = @$pair;
-                    if (exists($qt{$tid}) && length($qt{$tid}) >= 77) {
-                        my ($mask_lo, $mask_hi) = unpack("V V", substr($qt{$tid}, 0, 8));
-                        if ($mask_lo & 0x4000) {
-                            my $val = unpack("V", substr($qt{$tid}, 73, 4));
-                            $$ref = $val if $val > 0 && $val < 256;
-                        }
-                    }
-                }
-                $qci = $qci_dl // $qci_ul;
-            }
-        }
-        close($qs_sock);
-    }
-}
-
-if (exists $svc_port{1}) {
-    my ($wn, $wp) = @{$svc_port{1}};
-    if (socket(my $ws_sock, AF_QIPCRTR, SOCK_DGRAM, 0)) {
-        my $bind_tlv = pack("C S L L", 0x10, 8, 3, 4) . pack("C S C", 0x11, 1, 0x80);
-        my $rb = qmi_send_recv($ws_sock, $wn, $wp, 0x00, $tx++, 0x00A2, $bind_tlv);
-        my ($res_b, $err_b) = qmi_err(parse_tlvs($rb));
-        if ($res_b == 0) {
-            qmi_send_recv($ws_sock, $wn, $wp, 0x00, $tx++, 0x004D, pack("C S C", 0x01, 1, 4));
-            my $rx = qmi_send_recv($ws_sock, $wn, $wp, 0x00, $tx++, 0x0091, "");
-            my %wt = parse_tlvs($rx);
-            my ($res_w, $err_w) = qmi_err(%wt);
-            if ($res_w == 0 && exists($wt{0x10}) && length($wt{0x10}) >= 16) {
-                my ($tech, $rat, $so_lo, $so_hi) = unpack("V V V V", substr($wt{0x10}, 0, 16));
-                if ($rat == 6) {
-                    $rat_str = "NR5G-SA";
-                } elsif ($rat == 3) {
-                    $rat_str = "LTE";
-                }
-            }
-        }
-        close($ws_sock);
-    }
-}
-
-# 3. Read IMSI + AT+BNRINFO under flock (short 2s alarm)
+# 2. Read IMSI + AT+BNRINFO under non-blocking flock (0 QMI port binds)
 my $imsi = "";
 if (open(my $ifh, "<", "/tmp/.cached_imsi")) {
     my $c = <$ifh> // "";
@@ -189,35 +83,39 @@ if (open(my $ifh, "<", "/tmp/.cached_imsi")) {
     $imsi = $1 if $c =~ /(\d{14,15})/;
 }
 
+my $rat_str = undef;
 my ($nr_bw_mhz, $nr_cqi, $nr_rank, $nr_rsrq, $nr_rsrp, $nr_sinr, $nr_ssb) = (undef, undef, undef, undef, undef, undef, undef);
 my $at_ok = 0;
 eval {
     local $SIG{ALRM} = sub { die "AT_LOCK_TIMEOUT\n"; };
-    alarm(2);
     if (open(my $lfh, ">", "/tmp/.sms_at.lock")) {
-        flock($lfh, LOCK_EX);
-        if (!$imsi) {
-            my $cimi = `atcli 'AT+CIMI' 2>/dev/null`;
-            if ($cimi && $cimi =~ /(\d{14,15})/) {
-                $imsi = $1;
-                if (open(my $wfh, ">", "/tmp/.cached_imsi")) { print $wfh "$imsi\n"; close($wfh); }
+        if (flock($lfh, LOCK_EX | LOCK_NB)) {
+            alarm(2);
+            if (!$imsi) {
+                my $cimi = `atcli 'AT+CIMI' 2>/dev/null`;
+                if ($cimi && $cimi =~ /(\d{14,15})/) {
+                    $imsi = $1;
+                    if (open(my $wfh, ">", "/tmp/.cached_imsi")) { print $wfh "$imsi\n"; close($wfh); }
+                }
+            }
+            my $bnr = `atcli 'AT+BNRINFO' 2>/dev/null`;
+            alarm(0);
+            flock($lfh, LOCK_UN);
+            if (defined($bnr) && $bnr =~ /NR BAND:\d+/s) {
+                $at_ok     = 1;
+                $rat_str   = "NR5G-SA";
+                $nr_bw_mhz = int($1) if $bnr =~ /DL_bandwidth:(\d+)MHz/i;
+                $nr_rsrq   = int($1) if $bnr =~ /RSRQ\s+(-?\d+)\s*dB/i;
+                $nr_rsrp   = int($1) if $bnr =~ /RSRP\s+(-?\d+)\s*dBm/i;
+                $nr_sinr   = int($1) if $bnr =~ /SINR\s+(-?\d+)\s*dB/i;
+                if ($bnr =~ /NR CQI\s+(\d+)\s*,\s*RANK\s+(\d+)/i) {
+                    my $c = int($1); $nr_cqi  = $c if $c <= 15;
+                    my $r = int($2); $nr_rank = $r if $r >= 1 && $r <= 8;
+                }
+                $nr_ssb    = int($1) if $bnr =~ /Serving Beam SSB index\s+(\d+)/i;
             }
         }
-        my $bnr = `atcli 'AT+BNRINFO' 2>/dev/null`;
-        flock($lfh, LOCK_UN);
         close($lfh);
-        if (defined($bnr) && $bnr =~ /NR BAND:\d+/s) {
-            $at_ok = 1;
-            $nr_bw_mhz = int($1) if $bnr =~ /DL_bandwidth:(\d+)MHz/i;
-            $nr_rsrq   = int($1) if $bnr =~ /RSRQ\s+(-?\d+)\s*dB/i;
-            $nr_rsrp   = int($1) if $bnr =~ /RSRP\s+(-?\d+)\s*dBm/i;
-            $nr_sinr   = int($1) if $bnr =~ /SINR\s+(-?\d+)\s*dB/i;
-            if ($bnr =~ /NR CQI\s+(\d+)\s*,\s*RANK\s+(\d+)/i) {
-                my $c = int($1); $nr_cqi  = $c if $c <= 15;
-                my $r = int($2); $nr_rank = $r if $r >= 1 && $r <= 8;
-            }
-            $nr_ssb    = int($1) if $bnr =~ /Serving Beam SSB index\s+(\d+)/i;
-        }
     }
     alarm(0);
 };
@@ -228,6 +126,7 @@ if (!$at_ok && open(my $cf, "<", $cache_file)) {
     my $old = <$cf>;
     close($cf);
     if (defined($old)) {
+        $rat_str   = $1      if $old =~ /"rat"\s*:\s*"([^"]+)"/;
         $nr_bw_mhz = int($1) if $old =~ /"nr_bw_mhz"\s*:\s*(\d+)/;
         $nr_cqi    = int($1) if $old =~ /"nr_cqi"\s*:\s*(\d+)/;
         $nr_rank   = int($1) if $old =~ /"nr_rank"\s*:\s*(\d+)/;
@@ -238,27 +137,20 @@ if (!$at_ok && open(my $cf, "<", $cache_file)) {
     }
 }
 
-# 4. Session-AMBR from /data/.cached_ambr.json (keyed by IMSI, auto-refreshed on boot / SIM swap)
-my $boot_id = "";
-if (open(my $bf, "<", "/proc/sys/kernel/random/boot_id")) {
-    $boot_id = <$bf> // "";
-    close($bf);
-    $boot_id =~ s/\s+//g;
-}
-
+# 3. Static 5QI & Session-AMBR from /data/.cached_ambr.json (no boot_id check, no auto probe)
 if ($qs =~ /(?:^|&)refresh_ambr=1(?:&|$)/ && -x "/data/probe_ambr.pl") {
     system("/data/probe_ambr.pl --force >/dev/null 2>&1");
 }
 
+my ($qci, $qci_ul, $qci_dl) = (undef, undef, undef);
 my ($ambr_avail, $ambr_dl_kbps, $ambr_ul_kbps, $ambr_dl_mbps, $ambr_ul_mbps, $ambr_hex, $ambr_src, $ambr_reason, $ota_arp) =
-   (0, undef, undef, undef, undef, undef, undef, "probing", undef);
+   (0, undef, undef, undef, undef, undef, undef, "unprobed", undef);
 
-my $need_bg_probe = 1;
-if ($imsi ne "" && open(my $af, "<", $ambr_cache)) {
+if (open(my $af, "<", $ambr_cache)) {
     local $/;
     my $aj = <$af> // "";
     close($af);
-    if ($aj =~ /"ambr_available"\s*:\s*true/ && $aj =~ /"imsi"\s*:\s*"\Q$imsi\E"/) {
+    if ($aj =~ /"ambr_available"\s*:\s*true/ && ($imsi eq "" || $aj =~ /"imsi"\s*:\s*"\Q$imsi\E"/)) {
         $ambr_avail   = 1;
         $ambr_reason  = "5gsm_ota_0xc2";
         $ambr_dl_kbps = int($1) if $aj =~ /"ambr_dl_kbps"\s*:\s*(\d+)/;
@@ -268,20 +160,17 @@ if ($imsi ne "" && open(my $af, "<", $ambr_cache)) {
         $ambr_hex     = $1      if $aj =~ /"ambr_raw_hex"\s*:\s*"([^"]+)"/;
         $ambr_src     = $1      if $aj =~ /"ambr_source"\s*:\s*"([^"]+)"/;
         $ota_arp      = int($1) if $aj =~ /"ota_arp"\s*:\s*(\d+)/;
-        if (!defined($qci) && $aj =~ /"ota_5qi"\s*:\s*(\d+)/) {
-            $qci = int($1);
+        if ($aj =~ /"ota_5qi"\s*:\s*(\d+)/) {
+            $qci    = int($1);
+            $qci_ul = $qci;
+            $qci_dl = $qci;
         }
-        if ($boot_id ne "" && $aj =~ /"boot_id"\s*:\s*"\Q$boot_id\E"/) {
-            $need_bg_probe = 0;
-        }
+    } elsif ($imsi ne "" && $aj =~ /"imsi"\s*:/ && $aj !~ /"imsi"\s*:\s*"\Q$imsi\E"/) {
+        $ambr_reason = "sim_changed_unprobed";
     }
 }
 
-if ($need_bg_probe && -x "/data/probe_ambr.pl") {
-    system("/data/probe_ambr.pl >/dev/null 2>&1 &");
-}
-
-my $qos_label = defined($qci) ? ("5QI $qci (" . ($qci == 9 ? "Non-GBR" : "QoS") . ")") : "N/A";
+my $qos_label     = defined($qci) ? ("5QI $qci (" . ($qci == 9 ? "Non-GBR" : "QoS") . ")") : "N/A";
 my $ims_run_bool  = $ims_running ? "true" : "false";
 my $ims_reg_bool  = $ims_registered ? "true" : "false";
 my $ambr_av_bool  = $ambr_avail ? "true" : "false";
@@ -317,12 +206,14 @@ my $json = sprintf(
     json_str($ims_pcscf)
 );
 
-my $tmp = "$cache_file.tmp.$$";
-if (open(my $wf, ">", $tmp)) {
-    print $wf $json;
-    close($wf);
-    chmod(0644, $tmp);
-    rename($tmp, $cache_file);
+if ($at_ok || defined($nr_rsrp)) {
+    my $tmp = "$cache_file.tmp.$$";
+    if (open(my $wf, ">", $tmp)) {
+        print $wf $json;
+        close($wf);
+        chmod(0644, $tmp);
+        rename($tmp, $cache_file);
+    }
 }
 
 print $json;

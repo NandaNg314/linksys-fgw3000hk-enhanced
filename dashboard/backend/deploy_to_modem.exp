@@ -9,7 +9,7 @@ proc patch_modem {port tmo} {
         "/ # " {
             send "mkdir -p /data/www/cgi-bin\r"
             expect "/ # "
-            send "if ! sh -n /data/oem_init_post.sh 2>/dev/null; then sed -i 's/fi(.*/fi/' /data/oem_init_post.sh; grep -q 'probe_ambr.pl' /data/oem_init_post.sh || printf '\\nif \[ -x /data/probe_ambr.pl \]; then\\n    /data/probe_ambr.pl >/dev/null 2>&1 &\\nfi\\n' >> /data/oem_init_post.sh; sh /data/oem_init_post.sh & sleep 1; fi\r"
+            send "if ! sh -n /data/oem_init_post.sh 2>/dev/null; then sed -i 's/fi(.*/fi/' /data/oem_init_post.sh; sh /data/oem_init_post.sh & sleep 1; fi\r"
             expect "/ # "
             send "if ! pgrep -f 'busybox httpd.*55102' >/dev/null 2>&1; then busybox httpd -p 10.10.10.3:55102 -h /data/www; fi\r"
             expect "/ # "
