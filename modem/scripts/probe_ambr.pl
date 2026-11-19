@@ -168,7 +168,7 @@ if (opendir(my $dh, $cap_dir)) {
                 my $pkt_dnn = undef;
                 if ($opt =~ /\x25([\x02-\x20])/s) {
                     my $dlen = ord($1);
-                    my $dp = pos($opt);
+                    my $dp = $+[0];
                     if ($dp + $dlen <= length($opt)) {
                         my $ll = ord(substr($opt, $dp, 1));
                         if ($ll >= 1 && $ll < $dlen) {
@@ -184,7 +184,7 @@ if (opendir(my $dh, $cap_dir)) {
                 my ($pkt_5qi, $pkt_arp) = (undef, undef);
                 if ($opt =~ /\x79(..)/s) {
                     my $flen = unpack("n", $1);
-                    my $fp = pos($opt);
+                    my $fp = $+[0];
                     if ($flen >= 6 && $fp + $flen <= length($opt)) {
                         my $fbody = substr($opt, $fp, $flen);
                         my $idx = 3;
