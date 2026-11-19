@@ -50,7 +50,7 @@ if (opendir(my $pd, "/proc")) {
         if (open(my $cf, "<", "/proc/$entry/cmdline")) {
             my $cmd = <$cf>;
             close($cf);
-            if (defined($cmd) && $cmd =~ m{^/data/ims_sip\0?$}) {
+            if (defined($cmd) && $cmd =~ m{^/data/ims_sip(?:\0|$)}) {
                 $ims_running = 1;
                 last;
             }
@@ -66,14 +66,16 @@ if (open(my $sf, "<", "/tmp/ims_sip.status")) {
     my @parts = split(/\|/, $line, 3);
     if (@parts >= 2 && $parts[1] ne "") {
         $ims_state = $parts[1];
-        $ims_registered = ($ims_state eq "REGISTERED" && $ims_running) ? 1 : 0;
+        $ims_registered = (($ims_state eq "REGISTERED" || $ims_state eq "PULSING") && $ims_running) ? 1 : 0;
         if (defined($parts[2])) {
             $ims_ip    = $1 if $parts[2] =~ /ims_ip=([^\s]+)/;
             $ims_pcscf = $1 if $parts[2] =~ /pcscf=([^\s]+)/;
         }
     }
 }
-$ims_state = "STOPPED" unless $ims_running;
+if (!$ims_running && $ims_state ne "PULSE_IDLE") {
+    $ims_state = "PULSE_READY";
+}
 
 # 2. Read IMSI + AT+BNRINFO under non-blocking flock (0 QMI port binds)
 my $imsi = "";

@@ -4,31 +4,41 @@ ACTION=$(echo "$QUERY_STRING" | sed -n 's/.*action=\([^&]*\).*/\1/p')
 [ -z "$ACTION" ] && ACTION="status"
 
 start_daemon() {
-    if ! pgrep -f '^/data/ims_sip$' >/dev/null 2>&1; then
+    if ! pgrep -f '^/data/ims_sip' >/dev/null 2>&1; then
         nohup /data/ims_sip >/dev/null 2>&1 9>&- &
         sleep 1
     fi
 }
 
+pulse_daemon() {
+    if ! pgrep -f '^/data/ims_sip' >/dev/null 2>&1; then
+        nohup /data/ims_sip --once --ttl=12 >/dev/null 2>&1 9>&- &
+        sleep 1
+    fi
+}
+
 stop_daemon() {
-    PIDS=$(pgrep -f '^/data/ims_sip$' 2>/dev/null)
+    PIDS=$(pgrep -f '^/data/ims_sip' 2>/dev/null)
     if [ -n "$PIDS" ]; then
         kill $PIDS 2>/dev/null
         for i in 1 2 3 4 5 6; do
-            pgrep -f '^/data/ims_sip$' >/dev/null 2>&1 || break
+            pgrep -f '^/data/ims_sip' >/dev/null 2>&1 || break
             usleep 500000 2>/dev/null || sleep 1
         done
-        PIDS=$(pgrep -f '^/data/ims_sip$' 2>/dev/null)
+        PIDS=$(pgrep -f '^/data/ims_sip' 2>/dev/null)
         [ -n "$PIDS" ] && kill -9 $PIDS 2>/dev/null
     fi
 }
 
-if [ "$ACTION" = "ensure" ] || [ "$ACTION" = "restart" ] || [ "$ACTION" = "stop" ]; then
+if [ "$ACTION" = "ensure" ] || [ "$ACTION" = "pulse" ] || [ "$ACTION" = "restart" ] || [ "$ACTION" = "stop" ]; then
     exec 9>/tmp/.ims_sip_ctl.lock
     flock -x 9
     case "$ACTION" in
         ensure)
             start_daemon
+            ;;
+        pulse)
+            pulse_daemon
             ;;
         restart)
             stop_daemon
@@ -42,7 +52,7 @@ if [ "$ACTION" = "ensure" ] || [ "$ACTION" = "restart" ] || [ "$ACTION" = "stop"
     exec 9>&-
 fi
 
-PID=$(pgrep -f '^/data/ims_sip$' | head -n 1)
+PID=$(pgrep -f '^/data/ims_sip' | head -n 1)
 RUNNING="false"
 [ -n "$PID" ] && RUNNING="true"
 [ -z "$PID" ] && PID=0

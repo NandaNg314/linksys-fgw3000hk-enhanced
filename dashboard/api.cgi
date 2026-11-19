@@ -975,6 +975,18 @@ if [ "$ACTION" = "reboot_modem" ]; then
     exit 0
 fi
 
+# 21. Action: ims_pulse (12s on-demand 5G SA IMS SMS fetch & graceful de-register)
+if [ "$ACTION" = "ims_pulse" ]; then
+    rm -f /tmp/.ap_cell_qos.cache
+    p_out=$(curl -s -m 4 "http://10.10.10.3:55102/cgi-bin/ims_sip_ctl?action=pulse" 2>/dev/null)
+    if [ -n "$p_out" ]; then
+        echo "$p_out"
+    else
+        echo '{"ok":false,"error":"modem_unreachable"}'
+    fi
+    exit 0
+fi
+
 echo '{"error":"Invalid action"}'
 exit 0
 

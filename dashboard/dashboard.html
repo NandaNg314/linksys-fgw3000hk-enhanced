@@ -799,11 +799,11 @@
             <div class="qos-desc" id="val-ambr-desc">下行 / 上行最大会话聚合带宽</div>
           </div>
 
-          <div class="qos-card">
+          <div class="qos-card" id="card-ims-pulse" onclick="triggerImsPulse()" style="cursor: pointer;" title="5G SA 下点击触发 12 秒按需脉冲收取短信">
             <div class="qos-top">
               <span class="qos-label" id="lbl-ims-card">蜂窝短信通道</span>
-              <span class="qos-pill warn" id="pill-ims">
-                <span class="dot-6 warn" id="dot-ims-card"></span>
+              <span class="qos-pill ok" id="pill-ims">
+                <span class="dot-6" id="dot-ims-card"></span>
                 <span id="txt-ims-badge">检测中</span>
               </span>
             </div>
@@ -1534,11 +1534,12 @@
               : '当前基带未暴露 Session-AMBR';
           }
 
-          // SMS Channel Status (Adaptive: 5G IMS when registered, SGs in 5G NSA / 4G, warn only in pure SA without IMS)
+          // SMS Channel Status (Adaptive: 5G IMS when registered/pulsing, SGs in 5G NSA / 4G, On-demand Pulse Ready in pure 5G SA)
           const ims = data.ims || {};
           const imsKnown = data.ims !== undefined;
           const imsReg = ims.registered === true;
           const isSgsMode = String(c.sa_mode) === '1' || String(c.net_mode) === '1' || c.rat === 'NR5G-NSA' || !is5G;
+          window.lastIsPure5gSa = Boolean(is5G && !isSgsMode);
           const dotHdr = document.getElementById('dot-ims-hdr');
           const dotCard = document.getElementById('dot-ims-card');
           const pillIms = document.getElementById('pill-ims');
@@ -1548,10 +1549,11 @@
             dotHdr.className = 'dot-6';
             dotCard.className = 'dot-6';
             pillIms.className = 'qos-pill ok';
-            if (lblImsCard) lblImsCard.textContent = '5G IMS 短信通道';
-            document.getElementById('txt-ims-hdr').textContent = 'IMS 已注册';
-            document.getElementById('txt-ims-badge').textContent = ims.state || 'REGISTERED';
-            document.getElementById('val-ims-status').textContent = '5G IMS 短信在线';
+            const isPulsing = ims.state === 'PULSING';
+            if (lblImsCard) lblImsCard.textContent = isPulsing ? '5G IMS 脉冲收信中' : '5G IMS 短信通道';
+            document.getElementById('txt-ims-hdr').textContent = isPulsing ? '5G 脉冲收信中' : 'IMS 已注册';
+            document.getElementById('txt-ims-badge').textContent = isPulsing ? 'PULSING (12s)' : (ims.state || 'REGISTERED');
+            document.getElementById('val-ims-status').textContent = isPulsing ? '5G 脉冲收信中...' : '5G IMS 短信在线';
             if (ims.ip) {
               ipEl.textContent = `IMS IP: ${ims.ip}`;
               ipEl.title = `IMS IPv6: ${ims.ip} | P-CSCF: ${ims.pcscf || '--'}`;
@@ -1578,15 +1580,15 @@
             document.getElementById('txt-ims-badge').textContent = '待上报';
             document.getElementById('val-ims-status').textContent = '检测中';
           } else {
-            dotHdr.className = 'dot-6 warn';
-            dotCard.className = 'dot-6 warn';
-            pillIms.className = 'qos-pill warn';
-            if (lblImsCard) lblImsCard.textContent = '5G IMS 短信通道';
-            document.getElementById('txt-ims-hdr').textContent = 'IMS 未注册';
-            document.getElementById('txt-ims-badge').textContent = ims.state || 'OFFLINE';
-            document.getElementById('val-ims-status').textContent = ims.running ? '重注册中' : '服务未运行';
-            ipEl.textContent = '纯 5G SA 单 PDN 模式 (未启用 IMS)';
-            ipEl.title = '纯 5G SA 下需启用基带 IMS 方可收信';
+            dotHdr.className = 'dot-6';
+            dotCard.className = 'dot-6';
+            pillIms.className = 'qos-pill ok';
+            if (lblImsCard) lblImsCard.textContent = '5G SA 脉冲短信通道';
+            document.getElementById('txt-ims-hdr').textContent = '5G 脉冲待命';
+            document.getElementById('txt-ims-badge').textContent = ims.running ? 'PULSING' : 'PULSE READY';
+            document.getElementById('val-ims-status').textContent = ims.running ? '5G 脉冲收信中...' : '5G 脉冲按需收信';
+            ipEl.textContent = '点击此卡或收件箱触发 12s 脉冲收码 (单 PDN 稳态)';
+            ipEl.title = '平时保持纯单 PDN 5G SA 满速零死锁；点击即触发 12 秒 IMS 脉冲拉取积压短信并优雅注销';
           }
 
           // RSRP & SINR
@@ -1756,10 +1758,41 @@
       return m ? m[1] : null;
     }
 
+    let isImsPulsing = false;
+    async function triggerImsPulse(silent = false) {
+      if (isImsPulsing) {
+        if (!silent) showToast('5G 短信脉冲正在收取中，请稍候...', 'info');
+        return;
+      }
+      isImsPulsing = true;
+      try {
+        const statusEl = document.getElementById('val-ims-status');
+        const badgeEl = document.getElementById('txt-ims-badge');
+        if (statusEl) statusEl.textContent = '5G 脉冲收信中...';
+        if (badgeEl) badgeEl.textContent = 'PULSING (12s)';
+        if (!silent) showToast('已启动 12 秒 5G IMS 脉冲收信 (收完自动注销释放)...', 'info');
+        await fetch('/weblog/api.cgi?action=ims_pulse');
+        setTimeout(() => { fetchCellular(true); fetchSms(false); }, 3500);
+        setTimeout(() => { fetchSms(false); }, 7500);
+        setTimeout(() => {
+          isImsPulsing = false;
+          fetchCellular(true);
+          fetchSms(false);
+          if (!silent) showToast('5G 脉冲收信完成，已优雅注销并恢复纯单 PDN 稳态', 'success');
+        }, 14500);
+      } catch (e) {
+        isImsPulsing = false;
+        console.error(e);
+      }
+    }
+
     async function fetchSms(isManual = false) {
       const btn = document.getElementById('btn-fetch-sms');
       const ic = btn ? btn.querySelector('.ic') : null;
       if (ic && isManual) ic.classList.add('spin');
+      if (isManual && window.lastIsPure5gSa && !isImsPulsing) {
+        triggerImsPulse(false);
+      }
       try {
         const url = `/weblog/api.cgi?action=get_sms${isManual ? '&refresh=1' : ''}`;
         const res = await fetch(url);

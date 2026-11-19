@@ -814,8 +814,8 @@ func sendRpAck(conn *net.UDPConn, myIP, imsi, myURI, inCallID, targetHdr, servic
 	logf("-> Sent RP-ACK+DELIVER-REPORT (MR=0x%02x) to %s", rpMR, targetURI)
 }
 
-func doRegister(conn *net.UDPConn, myIP, imsi, realm, impi, impu string) (ok bool, serviceRoute, assocURI string) {
-	callID := fmt.Sprintf("goims-%d@%s", time.Now().Unix(), myIP)
+func doRegister(conn *net.UDPConn, myIP, imsi, realm, impi, impu string, expiresSec int) (ok bool, serviceRoute, assocURI string) {
+	callID := fmt.Sprintf("goims-%d-%d@%s", time.Now().Unix(), expiresSec, myIP)
 	reg1 := fmt.Sprintf(
 		"REGISTER sip:%s SIP/2.0\r\n"+
 			"Via: SIP/2.0/UDP [%s]:5060;branch=z9hG4bKreg1%d\r\n"+
@@ -826,9 +826,9 @@ func doRegister(conn *net.UDPConn, myIP, imsi, realm, impi, impu string) (ok boo
 			"CSeq: 1 REGISTER\r\n"+
 			"Contact: <sip:%s@[%s]:5060>;+g.3gpp.smsip\r\n"+
 			"Authorization: Digest username=\"%s\",realm=\"%s\",nonce=\"\",uri=\"sip:%s\",response=\"\"\r\n"+
-			"Expires: 3600\r\n"+
+			"Expires: %d\r\n"+
 			"Content-Length: 0\r\n\r\n",
-		realm, myIP, time.Now().Unix()%1000, impu, impu, callID, imsi, myIP, impi, realm, realm)
+		realm, myIP, time.Now().Unix()%1000, impu, impu, callID, imsi, myIP, impi, realm, realm, expiresSec)
 
 	if _, err := conn.Write([]byte(reg1)); err != nil {
 		return false, "", ""
@@ -841,7 +841,7 @@ func doRegister(conn *net.UDPConn, myIP, imsi, realm, impi, impu string) (ok boo
 	}
 	resp1 := string(buf[:n])
 	if strings.HasPrefix(resp1, "SIP/2.0 200") {
-		logf("REGISTER: SIP/2.0 200 OK (direct)")
+		logf("REGISTER(exp=%d): SIP/2.0 200 OK (direct)", expiresSec)
 		return true, extractHeader(resp1, "Service-Route"), extractURI(extractHeader(resp1, "P-Associated-URI"))
 	}
 	m := regexp.MustCompile(`nonce="([^"]+)"`).FindStringSubmatch(resp1)
@@ -883,9 +883,9 @@ func doRegister(conn *net.UDPConn, myIP, imsi, realm, impi, impu string) (ok boo
 			"CSeq: 2 REGISTER\r\n"+
 			"Contact: <sip:%s@[%s]:5060>;+g.3gpp.smsip\r\n"+
 			"Authorization: %s\r\n"+
-			"Expires: 3600\r\n"+
+			"Expires: %d\r\n"+
 			"Content-Length: 0\r\n\r\n",
-		realm, myIP, time.Now().Unix()%1000, impu, impu, callID, imsi, myIP, authHdr)
+		realm, myIP, time.Now().Unix()%1000, impu, impu, callID, imsi, myIP, authHdr, expiresSec)
 
 	if _, err := conn.Write([]byte(reg2)); err != nil {
 		return false, "", ""
@@ -896,7 +896,7 @@ func doRegister(conn *net.UDPConn, myIP, imsi, realm, impi, impu string) (ok boo
 		return false, "", ""
 	}
 	resp2 := string(buf[:n2])
-	logf("REGISTER: %s", strings.Split(resp2, "\r\n")[0])
+	logf("REGISTER(exp=%d): %s", expiresSec, strings.Split(resp2, "\r\n")[0])
 	if strings.HasPrefix(resp2, "SIP/2.0 200") {
 		return true, extractHeader(resp2, "Service-Route"), extractURI(extractHeader(resp2, "P-Associated-URI"))
 	}
@@ -941,14 +941,34 @@ func main() {
 		os.Exit(0)
 	}()
 
-	logf("=== ims_sip_modem started (iface=%s, mux=%d) ===", imsIfName, imsMuxID)
-	writeStatus("STARTING", "initializing")
+	onceMode := false
+	pulseTTL := 12 * time.Second
+	for _, arg := range os.Args[1:] {
+		if arg == "--once" || arg == "--pulse" {
+			onceMode = true
+		} else if strings.HasPrefix(arg, "--ttl=") {
+			if v, err := strconv.Atoi(strings.TrimPrefix(arg, "--ttl=")); err == nil && v >= 5 && v <= 60 {
+				pulseTTL = time.Duration(v) * time.Second
+			}
+		}
+	}
+
+	logf("=== ims_sip_modem started (iface=%s, mux=%d, once=%v) ===", imsIfName, imsMuxID, onceMode)
+	if onceMode {
+		writeStatus("PULSING", "starting_pdn")
+	} else {
+		writeStatus("STARTING", "initializing")
+	}
 
 	for {
 		imsi := getIMSI()
 		if imsi == "" {
 			writeStatus("WAITING", "no_imsi")
 			logf("Waiting for SIM IMSI...")
+			if onceMode {
+				writeStatus("PULSE_FAILED", "no_imsi")
+				return
+			}
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -957,6 +977,10 @@ func main() {
 		if err != nil {
 			writeStatus("WAITING", err.Error())
 			logf("Waiting for embedded ims PDN: %v", err)
+			if onceMode {
+				writeStatus("PULSE_FAILED", err.Error())
+				return
+			}
 			time.Sleep(10 * time.Second)
 			continue
 		}
@@ -986,7 +1010,7 @@ func main() {
 				logf("DialUDP %s -> %s err: %v", imsIP, p, err)
 				continue
 			}
-			if ok, sr, au := doRegister(c, imsIP, imsi, realm, impi, impu); ok {
+			if ok, sr, au := doRegister(c, imsIP, imsi, realm, impi, impu, 3600); ok {
 				conn = c
 				registered = true
 				serviceRoute = sr
@@ -995,8 +1019,12 @@ func main() {
 				} else {
 					myURI = impu
 				}
-				writeStatus("REGISTERED", fmt.Sprintf("pcscf=%s ims_ip=%s uri=%s", p, imsIP, myURI))
-				logf("Registered via P-CSCF %s (IMS_IP=%s, URI=%s)", p, imsIP, myURI)
+				stLabel := "REGISTERED"
+				if onceMode {
+					stLabel = "PULSING"
+				}
+				writeStatus(stLabel, fmt.Sprintf("pcscf=%s ims_ip=%s uri=%s", p, imsIP, myURI))
+				logf("Registered via P-CSCF %s (IMS_IP=%s, URI=%s, once=%v)", p, imsIP, myURI, onceMode)
 				break
 			}
 			_ = c.Close()
@@ -1006,15 +1034,34 @@ func main() {
 			writeStatus("REGISTER_FAILED", imsIP)
 			sess.stop()
 			activeSess = nil
+			cleanupNet(prevPcscfs)
+			if onceMode {
+				return
+			}
 			time.Sleep(15 * time.Second)
 			continue
 		}
+
+		pulseStart := time.Now()
+		pulseDeadline := pulseStart.Add(pulseTTL)
+		pulseMaxDeadline := pulseStart.Add(25 * time.Second)
+		rxCount := 0
 
 		lastReg := time.Now()
 		lastCheck := time.Now()
 		buf := make([]byte, 8192)
 		for {
-			if time.Since(lastCheck) > 60*time.Second {
+			if onceMode && time.Now().After(pulseDeadline) {
+				logf("Pulse window complete (rx=%d), sending SIP REGISTER(Expires:0) and stopping PDN...", rxCount)
+				_, _, _ = doRegister(conn, imsIP, imsi, realm, impi, impu, 0)
+				_ = conn.Close()
+				sess.stop()
+				activeSess = nil
+				cleanupNet(prevPcscfs)
+				writeStatus("PULSE_IDLE", fmt.Sprintf("rx=%d ims_ip=%s", rxCount, imsIP))
+				return
+			}
+			if !onceMode && time.Since(lastCheck) > 60*time.Second {
 				if !sess.isConnected() {
 					logf("IMS PDN disconnected, re-establishing...")
 					break
@@ -1030,8 +1077,8 @@ func main() {
 				}
 				lastCheck = time.Now()
 			}
-			if time.Since(lastReg) > 25*time.Minute {
-				if ok, sr, _ := doRegister(conn, imsIP, imsi, realm, impi, impu); !ok {
+			if !onceMode && time.Since(lastReg) > 25*time.Minute {
+				if ok, sr, _ := doRegister(conn, imsIP, imsi, realm, impi, impu, 3600); !ok {
 					logf("Periodic re-REGISTER failed, reconnecting...")
 					break
 				} else if sr != "" {
@@ -1039,7 +1086,19 @@ func main() {
 				}
 				lastReg = time.Now()
 			}
-			_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+			readWait := 30 * time.Second
+			if onceMode {
+				rem := time.Until(pulseDeadline)
+				if rem <= 0 {
+					continue
+				}
+				if rem < 2*time.Second {
+					readWait = rem
+				} else {
+					readWait = 2 * time.Second
+				}
+			}
+			_ = conn.SetReadDeadline(time.Now().Add(readWait))
 			n, err := conn.Read(buf)
 			if err != nil {
 				if ne, ok := err.(net.Error); ok && ne.Timeout() {
@@ -1077,12 +1136,27 @@ func main() {
 					}
 					logf("[5G-IMS-SMS] (%s) From: %s | Text: %s", sctsDate, sender, text)
 					saveImsSms(sender, sctsDate, text, fp)
+					rxCount++
+					if onceMode {
+						ext := time.Now().Add(4 * time.Second)
+						if ext.After(pulseMaxDeadline) {
+							ext = pulseMaxDeadline
+						}
+						if ext.After(pulseDeadline) {
+							pulseDeadline = ext
+						}
+					}
 				}
 			}
 		}
 		_ = conn.Close()
 		sess.stop()
 		activeSess = nil
+		cleanupNet(prevPcscfs)
+		if onceMode {
+			writeStatus("PULSE_IDLE", fmt.Sprintf("rx=%d", rxCount))
+			return
+		}
 		time.Sleep(3 * time.Second)
 	}
 }
