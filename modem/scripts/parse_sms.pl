@@ -115,7 +115,7 @@ sub parse_pdu {
         substr($ts_digits, 0, 2), substr($ts_digits, 2, 2), substr($ts_digits, 4, 2),
         substr($ts_digits, 6, 2), substr($ts_digits, 8, 2), substr($ts_digits, 10, 2));
 
-    my $udl = ord(substr($bytes, 0, 1));
+    my $udl = ord(substr($bytes, $pos, 1));
     $pos += 1;
 
     my $ud_bytes = substr($bytes, $pos);
@@ -258,7 +258,7 @@ sub write_inbox_if_changed {
     }
 }
 
-sub qmi_wms_is_empty {
+sub qmi_wms_counts {
     my $ql = `qrtr-lookup 2>/dev/null`;
     my ($wn, $wp);
     for my $line (split /\n/, ($ql // "")) {
@@ -269,21 +269,21 @@ sub qmi_wms_is_empty {
             last;
         }
     }
-    return 0 unless defined $wn;
-    socket(my $sock, 42, SOCK_DGRAM, 0) or return 0;
+    return (0, 0, 0) unless defined $wn;
+    socket(my $sock, 42, SOCK_DGRAM, 0) or return (0, 0, 0);
     my $sa = pack("S S L L", 42, 0, $wn, $wp);
     my $tx = 1;
-    my $total = 0;
+    my @cnts = (0, 0);
     for my $st (0, 1) {
         my $tlv = pack("C S C", 0x01, 1, $st) . pack("C S C", 0x11, 1, 0x01);
         my $pkt = pack("C S S S", 0x00, $tx++, 0x0031, length($tlv)) . $tlv;
-        send($sock, $pkt, 0, $sa) or do { close($sock); return 0; };
+        send($sock, $pkt, 0, $sa) or do { close($sock); return (0, 0, 0); };
         my $rin = "";
         vec($rin, fileno($sock), 1) = 1;
-        if (select($rin, undef, undef, 0.5) <= 0) { close($sock); return 0; }
+        if (select($rin, undef, undef, 0.5) <= 0) { close($sock); return (0, 0, 0); }
         my $buf = "";
         recv($sock, $buf, 4096, 0);
-        if (length($buf) < 7) { close($sock); return 0; }
+        if (length($buf) < 7) { close($sock); return (0, 0, 0); }
         my $pos = 7;
         my ($ok_res, $cnt) = (0, undef);
         while ($pos + 3 <= length($buf)) {
@@ -295,18 +295,19 @@ sub qmi_wms_is_empty {
             if ($t == 0x02 && $l == 4) {
                 my ($res, $err) = unpack("S S", $v);
                 $ok_res = ($res == 0) ? 1 : 0;
-            } elsif ($t == 0x01 && $l == 4) {
-                $cnt = unpack("V", $v);
+            } elsif ($t == 0x01 && $l >= 4) {
+                $cnt = unpack("V", substr($v, 0, 4));
             }
         }
-        if (!$ok_res || !defined($cnt)) { close($sock); return 0; }
-        $total += $cnt;
+        if (!$ok_res || !defined($cnt)) { close($sock); return (0, 0, 0); }
+        $cnts[$st] = $cnt;
     }
     close($sock);
-    return ($total == 0) ? 1 : 0;
+    return (1, $cnts[0], $cnts[1]);
 }
 
-if (qmi_wms_is_empty()) {
+my ($qmi_ok, $qmi_sm, $qmi_me) = qmi_wms_counts();
+if ($qmi_ok && $qmi_sm == 0 && $qmi_me == 0) {
     my @ims_items = load_ims_json_items();
     my $json = "{\"ok\":true,\"count\":" . scalar(@ims_items) . ",\"next_index\":0,\"messages\":[" . join(",", @ims_items) . "]}\n";
     print $json;
@@ -318,37 +319,26 @@ if (qmi_wms_is_empty()) {
 open(my $lock_fh, ">", "/tmp/.sms_at.lock") or die "Cannot open lock";
 flock($lock_fh, LOCK_EX);
 
-# 1. 快速检查存储槽位状态 (轻量级探测，保护串口)
-my $cpms_stat = at("AT+CPMS?");
-my $sm_count = 0;
-my $me_count = 0;
-if ($cpms_stat =~ /\+CPMS:\s*"SM",(\d+)/) { $sm_count = int($1); }
-if ($cpms_stat =~ /\+CPMS:[^\n]*"ME",(\d+)/) { $me_count = int($1); }
-
-if ($sm_count == 0 && $me_count == 0 && $cpms_stat =~ /OK/) {
-    my @ims_items = load_ims_json_items();
-    my $json = "{\"ok\":true,\"count\":" . scalar(@ims_items) . ",\"next_index\":0,\"messages\":[" . join(",", @ims_items) . "]}\n";
-    print $json;
-    if (open(my $fh, ">", "/data/inbox.json")) {
-        print $fh $json;
-        close($fh);
-    }
-    exit 0;
-}
-
 my @raw_msgs;
 my $max_idx = -1;
 my $total_raw = "";
 
-# 优先只扫描有短信的存储区
+# 优先只扫描确有短信的存储区；若 QMI 不可用则依次检测 SM 与 ME，绝不依赖只显示当前存储区的 AT+CPMS?
 my @storages;
-push @storages, 'SM' if ($sm_count > 0 || $cpms_stat !~ /\+CPMS/);
-push @storages, 'ME' if ($me_count > 0);
-@storages = ('SM') unless @storages;
+if ($qmi_ok) {
+    push @storages, 'SM' if ($qmi_sm > 0);
+    push @storages, 'ME' if ($qmi_me > 0);
+} else {
+    @storages = ('SM', 'ME');
+}
 
 for my $st (@storages) {
-    my $raw = "";
-    $raw .= at("AT+CPMS=\"$st\",\"$st\",\"$st\"");
+    my $cpms_out = at("AT+CPMS=\"$st\",\"$st\",\"$st\"");
+    my $raw = $cpms_out;
+    if ($cpms_out =~ /\+CPMS:\s*0,/) {
+        $total_raw .= "[$st]\n" . $raw . "\n";
+        next;
+    }
     $raw .= at("AT+CMGF=0");
     $raw .= at("AT+CMGL=4");
     $total_raw .= "[$st]\n" . $raw . "\n";
@@ -445,7 +435,4 @@ push @json_items, load_ims_json_items();
 my $json = "{\"ok\":true,\"count\":" . scalar(@json_items) . ",\"next_index\":$next_idx,\"messages\":[" . join(",", @json_items) . "]}\n";
 print $json;
 
-if (open(my $fh, ">", "/data/inbox.json")) {
-    print $fh $json;
-    close($fh);
-}
+write_inbox_if_changed($json);
